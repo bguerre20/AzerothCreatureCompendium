@@ -109,7 +109,8 @@ function addon:InitDatabase()
             local hasLoot = (mob.loot and (mob.loot.totalLoots or 0) > 0) or ((mob.totalLoots or 0) > 0)
             local hasKills = (mob.kills or 0) > 0
             local hasHarvest = (mob.professions and (mob.professions.totalHarvests or 0) > 0)
-            if not hasLoot and not hasKills and not hasHarvest then
+            local isRare = (mob.classification == "rare" or mob.classification == "rareelite")
+            if not hasLoot and not hasKills and not hasHarvest and not isRare then
                 zone.mobs[npcID] = nil
             end
         end
@@ -120,6 +121,72 @@ function addon:InitDatabase()
     BgLootLoggerDB = db
 
     self.db = db
+
+    -- Seed test mobs for Dun Morogh (Rare & Elite preview)
+    self:SeedDunMoroghTestMobs()
+end
+
+-- Preview test mobs in Dun Morogh (one Rare spawn and one Elite)
+function addon:SeedDunMoroghTestMobs()
+    if not self.db or not self.db.zones then return end
+
+    -- Find Dun Morogh zone (or Coldridge Valley)
+    local targetMapID = nil
+    for mapID, zone in pairs(self.db.zones) do
+        if zone.name and (zone.name:find("Dun Morogh") or zone.name:find("Coldridge")) then
+            targetMapID = mapID
+            break
+        end
+    end
+
+    if not targetMapID then
+        -- Default to mapID 1426 (Dun Morogh)
+        targetMapID = 1426
+        self.db.zones[targetMapID] = {
+            id = targetMapID,
+            name = "Dun Morogh",
+            mobs = {}
+        }
+    end
+
+    local zone = self.db.zones[targetMapID]
+
+    -- 1. Rare Test Mob: Timber (Silver font, single coordinates, [Rare] tag)
+    if not zone.mobs[1132] then
+        zone.mobs[1132] = {
+            npcID = 1132,
+            name = "Timber",
+            classification = "rare",
+            creatureType = "Beast",
+            minLevel = 10,
+            maxLevel = 10,
+            kills = 0,
+            coords = { { x = 47.8, y = 43.4, time = time() } },
+            loot = { totalLoots = 0, items = {}, coords = { { x = 47.8, y = 43.4, time = time() } } },
+            combat = { attacks = { swings = 0, minDmg = 18, maxDmg = 26, avgDmg = 22 }, spells = {}, immunities = {} },
+            professions = { totalHarvests = 0, items = {}, bySkill = {} }
+        }
+        self.db.npcToZones[1132] = self.db.npcToZones[1132] or {}
+        self.db.npcToZones[1132][targetMapID] = true
+    end
+
+    -- 2. Elite Test Mob: Vagash (Gold font, no coordinates)
+    if not zone.mobs[1388] then
+        zone.mobs[1388] = {
+            npcID = 1388,
+            name = "Vagash",
+            classification = "elite",
+            creatureType = "Beast",
+            minLevel = 11,
+            maxLevel = 11,
+            kills = 1,
+            combat = { attacks = { swings = 6, minDmg = 42, maxDmg = 65, totalDmg = 310, avgDmg = 52 }, spells = {}, immunities = {} },
+            loot = { totalLoots = 1, totalMoney = 180, avgMoney = 180, items = {} },
+            professions = { totalHarvests = 0, items = {}, bySkill = {} }
+        }
+        self.db.npcToZones[1388] = self.db.npcToZones[1388] or {}
+        self.db.npcToZones[1388][targetMapID] = true
+    end
 end
 
 -- Core factory: ensures Zone and Mob exist with the new Pokédex structure
@@ -235,20 +302,13 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     return mob, zone
 end
 
--- Helper to record unique coordinate sightings (up to 5 locations)
+-- Helper to record rare spawn coordinate sighting (only for rare spawns!)
 function addon:RecordCoordinates(mob, coords)
     if not mob or not coords or not coords.x or not coords.y then return end
-    mob.coords = mob.coords or {}
-    for _, pt in ipairs(mob.coords) do
-        if math.abs(pt.x - coords.x) < 0.8 and math.abs(pt.y - coords.y) < 0.8 then
-            return
-        end
-    end
-    table.insert(mob.coords, 1, { x = coords.x, y = coords.y, time = time() })
-    if #mob.coords > 5 then
-        table.remove(mob.coords)
-    end
-    -- Keep backwards compatibility on loot object
+    local isRare = (mob.classification == "rare" or mob.classification == "rareelite")
+    if not isRare then return end
+
+    mob.coords = { { x = coords.x, y = coords.y, time = time() } }
     if mob.loot then
         mob.loot.coords = mob.coords
     end

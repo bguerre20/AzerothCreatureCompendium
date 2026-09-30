@@ -669,19 +669,14 @@ function addon:RefreshSelectedMobCard()
     local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
     self.mobStatsText:SetText(string.format("Kills: |cffffffff%d|r   Loot: |cffffffff%d|r   Harvests: |cffffffff%d|r   NPC ID: |cffffffff%d|r", killsCount, lootsCount, harvestsCount, mob.npcID))
 
-    -- Coordinates Line
+    -- Coordinates Line: ONLY displayed for rare spawns!
     if self.mobCoordsText then
-        if mob.coords and #mob.coords > 0 then
-            local coordList = {}
-            for idx = 1, math.min(#mob.coords, 3) do
-                table.insert(coordList, string.format("(%0.1f, %0.1f)", mob.coords[idx].x, mob.coords[idx].y))
-            end
-            local coordStr = table.concat(coordList, ", ")
-            local labelCol = isRareMob and "|cffe0e0e0Coords:|r" or "|cffc7a16bCoords:|r"
-            self.mobCoordsText:SetText(string.format("%s |cffffffff%s|r", labelCol, coordStr))
+        if isRareMob and mob.coords and #mob.coords > 0 then
+            local pt = mob.coords[1]
+            self.mobCoordsText:SetText(string.format("|cffe0e0e0Coords:|r |cffffffff(%0.1f, %0.1f)|r", pt.x, pt.y))
             self.mobCoordsText:Show()
         elseif isRareMob then
-            self.mobCoordsText:SetText("|cffe0e0e0Coords:|r |cff888888(Target or encounter to record)|r")
+            self.mobCoordsText:SetText("|cffe0e0e0Coords:|r |cff888888(Target to record)|r")
             self.mobCoordsText:Show()
         else
             self.mobCoordsText:Hide()
