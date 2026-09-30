@@ -102,17 +102,17 @@ graph TD
 
 ## 📦 Component Breakdown & File Registry
 
-The addon is modularized across seven specialized Lua files plus the TOC manifest. Load order is strictly sequential as defined in [AzerothCreatureCompendium.toc](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/AzerothCreatureCompendium.toc).
+The addon is modularized across seven specialized Lua files plus the TOC manifest. Load order is strictly sequential as defined in [AzerothCreatureCompendium.toc](../AzerothCreatureCompendium.toc).
 
 | Execution Order | File | Responsibility | Primary APIs / Exports |
 | :--- | :--- | :--- | :--- |
-| **1** | [Config.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/Config.lua) | Global namespace initialization, constant definitions, color matrices, default preferences, and slash command registries. | `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
-| **2** | [Database.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and test data seeding. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
-| **3** | [CombatLog.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
-| **4** | [Core.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
-| **5** | [Tooltip.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/Tooltip.lua) | Tri-sidecar companion tooltips (Loot, Combat, Professions) anchored next to Blizzard's native `GameTooltip` with live modifier detection and dynamic screen clamping. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
-| **6** | [CompendiumWindow.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree, 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
-| **7** | [Options.lua](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/Options.lua) | Blizzard Interface Options integration (`Settings.RegisterAddOnCategory`), UI sliders, dropdowns, and keybinding selectors with live updates. | `addon:CreateOptionsPanel()` |
+| **1** | [Config.lua](../Config.lua) | Global namespace initialization, constant definitions, color matrices, default preferences, and slash command registries. | `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
+| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and test data seeding. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
+| **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
+| **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
+| **5** | [Tooltip.lua](../Tooltip.lua) | Tri-sidecar companion tooltips (Loot, Combat, Professions) anchored next to Blizzard's native `GameTooltip` with live modifier detection and dynamic screen clamping. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
+| **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree, 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
+| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterAddOnCategory`), UI sliders, dropdowns, and keybinding selectors with live updates. | `addon:CreateOptionsPanel()` |
 
 ---
 
@@ -351,9 +351,9 @@ AzerothCreatureCompendiumDB
 
 When implementing new features or modifying the codebase, adhere to these mandatory conventions:
 
-1. **TOC Load Order Preservation:** Never reorder files in [AzerothCreatureCompendium.toc](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/AzerothCreatureCompendium.toc) without updating dependencies. `Config.lua` and `Database.lua` must always load before consumers.
+1. **TOC Load Order Preservation:** Never reorder files in [AzerothCreatureCompendium.toc](../AzerothCreatureCompendium.toc) without updating dependencies. `Config.lua` and `Database.lua` must always load before consumers.
 2. **Database Mutations via Factory:** Always mutate mob records using `addon:GetOrCreateMob()` or dedicated recording methods (`RecordLoot`, `RecordSpellCast`, etc.). Never assign raw tables directly into `db.zones[mapID].mobs[npcID]`.
 3. **No Unfiltered Combat Log Hooks:** Do not introduce `COMBAT_LOG_EVENT_UNFILTERED`. If new combat data is needed, find a public unit event alternative.
 4. **Coordinate Policy Adherence:** Never record coordinates for non-rare creatures unless explicitly configured by the user.
 5. **UI Scaling & Screen Clamping:** When modifying sidecar or browser frames, ensure `SetClampedToScreen(true)` and dynamic parent scaling are preserved so elements render properly across 1080p, 1440p, 4K, and custom UI scales.
-6. **Deploy & Validate:** Always verify scripts via PowerShell syntax checking and test deployment using [deploy.ps1](file:///c:/Users/bryan/OneDrive/Documents/Coding/AzerothCreatureCompendium/deploy.ps1).
+6. **Deploy & Validate:** Always verify scripts via PowerShell syntax checking and test deployment using [deploy.ps1](../deploy.ps1).
