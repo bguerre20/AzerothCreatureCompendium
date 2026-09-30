@@ -19,6 +19,11 @@ The **Azeroth Creature Compendium (ACC)** dynamically observes, catalogs, and in
 
 ---
 
+> ### 🧭 Core Philosophy: Journey Before Destination
+> This addon is developed with the core gameplay pillar of **Journey Before Destination**. While there may be many addons out there that have all this information baked in, and you can absolutely Google this and get all the answers on Wowhead, I felt that in the spirit of the game I wanted something that feels like an explorer's journal you are appending to as you play. You may not have all the info today, but if you keep playing you will keep accruing it and you can reference your personal compendium at any time.
+
+---
+
 ## 🏗️ System Architecture Overview
 
 The compendium follows a decoupled, event-driven architecture designed for zero game taint, zero performance overhead, and low memory consumption:
