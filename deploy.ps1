@@ -1,4 +1,4 @@
-﻿# deploy.ps1 - Copies development files to your World of Warcraft AddOns folder
+# deploy.ps1 - Copies development files to your World of Warcraft AddOns folder
 param(
     [string]$TargetDir = "c:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns\AzerothCreatureCompendium"
 )
@@ -21,7 +21,8 @@ $Excludes = @(
     "deploy.ps1",
     "deploy.bat",
     ".vscode*",
-    ".gemini*"
+    ".gemini*",
+    "AGENTS.md"
 )
 
 Write-Host "Source: $CurrentDir" -ForegroundColor Gray
