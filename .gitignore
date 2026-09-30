@@ -1,0 +1,20 @@
+﻿# IDE & Editor folders
+.vscode/
+.idea/
+.gemini/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary & backup files
+*.bak
+*.tmp
+*~
+*.orig
