@@ -235,8 +235,27 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     return mob, zone
 end
 
+-- Helper to record unique coordinate sightings (up to 5 locations)
+function addon:RecordCoordinates(mob, coords)
+    if not mob or not coords or not coords.x or not coords.y then return end
+    mob.coords = mob.coords or {}
+    for _, pt in ipairs(mob.coords) do
+        if math.abs(pt.x - coords.x) < 0.8 and math.abs(pt.y - coords.y) < 0.8 then
+            return
+        end
+    end
+    table.insert(mob.coords, 1, { x = coords.x, y = coords.y, time = time() })
+    if #mob.coords > 5 then
+        table.remove(mob.coords)
+    end
+    -- Keep backwards compatibility on loot object
+    if mob.loot then
+        mob.loot.coords = mob.coords
+    end
+end
+
 -- Update creature metadata from unit inspection (target, mouseover, nameplates)
-function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType)
+function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType, coords)
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -255,6 +274,10 @@ function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classifica
         if not mob.maxLevel or level > mob.maxLevel then
             mob.maxLevel = level
         end
+    end
+
+    if coords and coords.x and coords.y then
+        self:RecordCoordinates(mob, coords)
     end
 end
 
@@ -595,10 +618,13 @@ function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immu
 end
 
 -- Records a kill
-function addon:RecordKill(mapID, zoneName, npcID, mobName)
+function addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
     mob.kills = (mob.kills or 0) + 1
+    if coords and coords.x and coords.y then
+        self:RecordCoordinates(mob, coords)
+    end
 end
 
 -- Retrieve mob data (current zone first, then cross-zone fallback)
