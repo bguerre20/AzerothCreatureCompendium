@@ -24,8 +24,9 @@ local function InitializeOptions()
 
     -- Version and author
     local version = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    version:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 8, 2)
-    version:SetText("v2.0.0 by Bryan")
+    local displayVer = addon.VERSION or "1.0.0"
+    if not displayVer:match("^v") then displayVer = "v" .. displayVer end
+    version:SetText(displayVer .. " by " .. (addon.AUTHOR or "Bryan"))
 
     -- Subtitle / Description
     local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")

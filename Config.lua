@@ -11,7 +11,12 @@ _G["BgLootLogger"] = addon
 -- Addon Metadata
 addon.NAME = "Azeroth Creature Compendium"
 addon.SHORT_NAME = "Compendium"
-addon.VERSION = "2.0.0"
+local tocVersion = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata("AzerothCreatureCompendium", "Version"))
+    or (GetAddOnMetadata and GetAddOnMetadata("AzerothCreatureCompendium", "Version"))
+if not tocVersion or tocVersion:find("@") then
+    tocVersion = "1.0.0"
+end
+addon.VERSION = tocVersion
 addon.AUTHOR = "Bryan"
 addon.ICON = "Interface\\Icons\\INV_Misc_Book_09"
 
