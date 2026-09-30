@@ -1,6 +1,6 @@
 # Azeroth Creature Compendium - System Architecture
 
-> **Document Version:** 2.0.0  
+> **Document Version:** 1.0.0  
 > **Target Environment:** World of Warcraft Classic (Interface: 11504, 11505, 11506, 11503, 11404)  
 > **Status:** Active / Production  
 > **Audience:** Senior Architects, Junior Developers, Executives, and AI Coding Agents
@@ -106,7 +106,7 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 
 | Execution Order | File | Responsibility | Primary APIs / Exports |
 | :--- | :--- | :--- | :--- |
-| **1** | [Config.lua](../Config.lua) | Global namespace initialization, constant definitions, color matrices, default preferences, and slash command registries. | `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
+| **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, and slash command registries. | `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
 | **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and test data seeding. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
 | **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
@@ -344,6 +344,10 @@ AzerothCreatureCompendiumDB
 ### 4. Non-Destructive Auto-Migration
 - **Context:** Users upgrading from legacy versions (`BgLootLogger`) must not lose previously recorded mob drop data.
 - **Decision:** On initial load, the migration engine detects legacy tables, upgrades schema objects to the 3-sibling hierarchy (`Combat`, `Loot`, `Professions`), and maintains synchronized backward-compatible aliases.
+
+### 5. Automated CI/CD Release Pipeline & Semantic Versioning
+- **Context:** Manual zip archiving and uploading to CurseForge/GitHub is error-prone, risks committing local development artifacts, and causes version drift between TOC manifests and in-game UI.
+- **Decision:** Releases are automated via `BigWigsMods/packager@v2` triggered on Git tag push (`v*`). Development tools and docs are excluded via `.pkgmeta`. The TOC manifest and config dynamically interpolate `@project-version@` tags into the authoritative `addon.VERSION` constant, adhering strictly to Semantic Versioning (`MAJOR.MINOR.PATCH`).
 
 ---
 

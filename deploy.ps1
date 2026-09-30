@@ -22,7 +22,9 @@ $Excludes = @(
     "deploy.bat",
     ".vscode*",
     ".gemini*",
-    "AGENTS.md"
+    "AGENTS.md",
+    ".pkgmeta",
+    "docs*"
 )
 
 Write-Host "Source: $CurrentDir" -ForegroundColor Gray
