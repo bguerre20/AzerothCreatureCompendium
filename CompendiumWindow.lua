@@ -253,6 +253,11 @@ function addon:CreateCompendiumWindow()
     mobStatsText:SetJustifyH("LEFT")
     self.mobStatsText = mobStatsText
 
+    local mobCoordsText = mobCard:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    mobCoordsText:SetPoint("TOPLEFT", mobStatsText, "BOTTOMLEFT", 0, -4)
+    mobCoordsText:SetJustifyH("LEFT")
+    self.mobCoordsText = mobCoordsText
+
     -- Model Spin Hint
     local spinHint = mobCard:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     spinHint:SetPoint("TOPLEFT", modelContainer, "BOTTOMLEFT", 0, -4)
@@ -441,7 +446,9 @@ function addon:BuildTreeList()
             local hasHarvested = (mob.professions and (mob.professions.totalHarvests or 0) > 0)
 
             -- ONLY track mobs the player has killed, looted, or harvested!
-            if hasKilled or hasLooted or hasHarvested then
+            local isRareMob = (mob.classification == "rare" or mob.classification == "rareelite")
+            -- Track mobs the player has killed, looted, harvested, or spotted rare spawns!
+            if hasKilled or hasLooted or hasHarvested or isRareMob then
                 totalMobs = totalMobs + 1
                 local mobMatches = zoneMatches or string.find(string.lower(mob.name or ""), query, 1, true)
 
@@ -559,12 +566,22 @@ function addon:UpdateTreeListRows()
                 row.icon:SetPoint("LEFT", row, "LEFT", 22, 0)
 
                 local mob = data.mob
-                local col = (mob.classification == "elite" or mob.classification == "rareelite") and "|cffffd100" or "|cffe5a558"
-                row.title:SetText(string.format("%s%s|r", col, data.name))
+                local isRareMob = (mob.classification == "rare" or mob.classification == "rareelite")
+                local isEliteMob = (mob.classification == "elite" or mob.classification == "worldboss")
+                -- Silver for rarespawns, Gold for elites, Bronze for normal mobs
+                local col = isRareMob and "|cffe0e0e0" or (isEliteMob and "|cffffd100" or "|cffe5a558")
+
+                local coordTag = ""
+                if isRareMob and mob.coords and mob.coords[1] then
+                    coordTag = string.format(" |cffaaaaaa(%0.1f, %0.1f)|r", mob.coords[1].x, mob.coords[1].y)
+                end
+                row.title:SetText(string.format("%s%s|r%s", col, data.name, coordTag))
                 row.title:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
 
                 local killsOrLoots = ""
-                if mob.kills and mob.kills > 0 then
+                if isRareMob and (not mob.kills or mob.kills == 0) and (not mob.loot or not mob.loot.totalLoots or mob.loot.totalLoots == 0) then
+                    killsOrLoots = "|cffe0e0e0[Rare]|r"
+                elseif mob.kills and mob.kills > 0 then
                     killsOrLoots = mob.kills .. " kills"
                 elseif mob.loot and mob.loot.totalLoots and mob.loot.totalLoots > 0 then
                     killsOrLoots = mob.loot.totalLoots .. " loots"
@@ -623,17 +640,48 @@ function addon:RefreshSelectedMobCard()
     end
 
     -- 2. Header Text
-    local classificationName = (mob.classification and mob.classification ~= "normal") and (string.upper(mob.classification:sub(1,1)) .. mob.classification:sub(2)) or ""
-    self.mobNameText:SetText(string.format("|cffffd100%s|r", mob.name or ("Creature " .. mob.npcID)))
+    local isRareMob = (mob.classification == "rare" or mob.classification == "rareelite")
+    local isEliteMob = (mob.classification == "elite" or mob.classification == "worldboss")
+    local nameCol = isRareMob and "|cffe0e0e0" or (isEliteMob and "|cffffd100" or "|cffe5a558")
+    self.mobNameText:SetText(string.format("%s%s|r", nameCol, mob.name or ("Creature " .. mob.npcID)))
+
+    local classificationName = ""
+    if mob.classification == "rare" then
+        classificationName = "|cffe0e0e0Rare|r"
+    elseif mob.classification == "rareelite" then
+        classificationName = "|cffe0e0e0Rare Elite|r"
+    elseif mob.classification == "elite" then
+        classificationName = "|cffffd100Elite|r"
+    elseif mob.classification == "worldboss" then
+        classificationName = "|cffff2020Boss|r"
+    end
 
     local levelStr = "Level " .. (mob.minLevel and (mob.minLevel == mob.maxLevel and mob.minLevel or (mob.minLevel .. "-" .. mob.maxLevel)) or "??")
     local typeStr = mob.creatureType or "Unknown Family"
-    self.mobMetaText:SetText(string.format("|cffffffff%s %s %s|r", levelStr, classificationName, typeStr))
+    if classificationName ~= "" then
+        self.mobMetaText:SetText(string.format("|cffffffff%s|r %s |cffffffff%s|r", levelStr, classificationName, typeStr))
+    else
+        self.mobMetaText:SetText(string.format("|cffffffff%s %s|r", levelStr, typeStr))
+    end
 
     local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
     local killsCount = mob.kills or 0
     local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
     self.mobStatsText:SetText(string.format("Kills: |cffffffff%d|r   Loot: |cffffffff%d|r   Harvests: |cffffffff%d|r   NPC ID: |cffffffff%d|r", killsCount, lootsCount, harvestsCount, mob.npcID))
+
+    -- Coordinates Line: ONLY displayed for rare spawns!
+    if self.mobCoordsText then
+        if isRareMob and mob.coords and #mob.coords > 0 then
+            local pt = mob.coords[1]
+            self.mobCoordsText:SetText(string.format("|cffe0e0e0Coords:|r |cffffffff(%0.1f, %0.1f)|r", pt.x, pt.y))
+            self.mobCoordsText:Show()
+        elseif isRareMob then
+            self.mobCoordsText:SetText("|cffe0e0e0Coords:|r |cff888888(Target to record)|r")
+            self.mobCoordsText:Show()
+        else
+            self.mobCoordsText:Hide()
+        end
+    end
 
     -- 3. Populate Active Tab Content
     if self.UpdateTabHighlight then

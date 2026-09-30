@@ -159,11 +159,15 @@ function addon:CacheUnit(unit)
         creatureType = creatureType
     }
 
-    -- ONLY update database if this mob already exists (was killed/looted)
-    -- This prevents friendly NPCs, vendors, and questgivers from ever being added!
-    local mapID, zoneName, _ = self:GetPlayerLocation()
-    if self.db and self.db.zones and self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID] then
-        self:UpdateUnitMeta(npcID, mapID, zoneName, name, level, classification, creatureType)
+    -- Update database if mob exists, OR if it is a hostile/neutral rare spawn (so sightings are recorded!)
+    -- This prevents friendly NPCs, vendors, and questgivers from ever being added.
+    local mapID, zoneName, coords = self:GetPlayerLocation()
+    local isRare = (classification == "rare" or classification == "rareelite")
+    local isNotFriend = not UnitIsFriend("player", unit)
+    local mobExists = self.db and self.db.zones and self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID]
+
+    if mobExists or (isRare and isNotFriend) then
+        self:UpdateUnitMeta(npcID, mapID, zoneName, name, level, classification, creatureType, coords)
     end
 end
 
@@ -345,11 +349,11 @@ function addon:ProcessLoot()
         addon.activeGatherCast = nil
     else
         self:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords)
-        self:RecordKill(mapID, zoneName, npcID, mobName)
+        self:RecordKill(mapID, zoneName, npcID, mobName, coords)
 
         local meta = self.unitMetaCache[npcID]
         if meta then
-            self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, meta.level, meta.classification, meta.creatureType)
+            self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, meta.level, meta.classification, meta.creatureType, coords)
         end
 
         self.lastLootedMob = {

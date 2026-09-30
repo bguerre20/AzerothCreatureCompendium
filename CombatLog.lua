@@ -177,8 +177,8 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
             local npcID = addon:GetNPCIDFromGUID(guid)
             if npcID and not addon.lootedCorpseGUIDs[guid] then
                 local mobName = UnitName("target") or ("Creature " .. npcID)
-                local mapID, zoneName, _ = addon:GetPlayerLocation()
-                addon:RecordKill(mapID, zoneName, npcID, mobName)
+                local mapID, zoneName, coords = addon:GetPlayerLocation()
+                addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
             end
         end
     end
