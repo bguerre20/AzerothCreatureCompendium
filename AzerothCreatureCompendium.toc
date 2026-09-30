@@ -5,7 +5,7 @@
 ## Version: @project-version@
 ## IconTexture: 133741
 ## SavedVariables: AzerothCreatureCompendiumDB, BgLootLoggerDB
-## X-Curse-Project-ID: 
+## X-Curse-Project-ID: 1719923
 
 Config.lua
 Database.lua
