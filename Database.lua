@@ -1,0 +1,909 @@
+--[[
+    Azeroth Creature Compendium - Database.lua
+    Data storage, Pokédex hierarchy (Zone -> Mob -> [Combat, Loot]),
+    calculations, auto-migration, and queries.
+]]
+
+local ADDON_NAME, addon = ...
+
+-- Quality formatting helpers
+function addon:GetQualityHex(quality)
+    return self.QUALITY_HEX[quality or 1] or "ffffff"
+end
+
+function addon:FormatQualityName(name, quality)
+    local hex = self:GetQualityHex(quality)
+    return string.format("|cff%s%s|r", hex, name or "Unknown Item")
+end
+
+-- Initialize and migrate database
+function addon:InitDatabase()
+    -- Initialize primary SavedVariable
+    AzerothCreatureCompendiumDB = AzerothCreatureCompendiumDB or {}
+    local db = AzerothCreatureCompendiumDB
+
+    db.version = 2
+    db.settings = db.settings or {}
+
+    -- Merge defaults
+    for k, v in pairs(self.DEFAULT_SETTINGS) do
+        if db.settings[k] == nil then
+            db.settings[k] = v
+        end
+    end
+
+    db.zones = db.zones or {}
+    db.npcToZones = db.npcToZones or {}
+
+    -- Auto-migration from legacy BgLootLoggerDB if present
+    if BgLootLoggerDB and BgLootLoggerDB.zones then
+        for mapID, oldZone in pairs(BgLootLoggerDB.zones) do
+            if not db.zones[mapID] then
+                db.zones[mapID] = {
+                    id = mapID,
+                    name = oldZone.name or ("Zone " .. mapID),
+                    mobs = {}
+                }
+            end
+            local targetZone = db.zones[mapID]
+
+            for npcID, oldMob in pairs(oldZone.mobs or {}) do
+                if not targetZone.mobs[npcID] then
+                    targetZone.mobs[npcID] = {
+                        npcID = npcID,
+                        name = oldMob.name or ("Creature " .. npcID),
+                        coords = oldMob.coords or {},
+                        encounters = oldMob.totalLoots or 0,
+                        kills = 0,
+                        combat = {
+                            attacks = { swings = 0, minDmg = 0, maxDmg = 0, totalDmg = 0, avgDmg = 0 },
+                            spells = {},
+                            immunities = {}
+                        },
+                        loot = {
+                            totalLoots = oldMob.totalLoots or 0,
+                            emptyLoots = oldMob.emptyLoots or 0,
+                            totalMoney = oldMob.totalMoney or 0,
+                            avgMoney = oldMob.avgMoney or 0,
+                            coords = oldMob.coords or {},
+                            items = oldMob.items or {}
+                        }
+                    }
+                    -- Backwards compatibility aliases on mob object
+                    local m = targetZone.mobs[npcID]
+                    m.totalLoots = m.loot.totalLoots
+                    m.avgMoney = m.loot.avgMoney
+                    m.items = m.loot.items
+                end
+            end
+        end
+
+        if BgLootLoggerDB.npcToZones then
+            for npcID, zones in pairs(BgLootLoggerDB.npcToZones) do
+                db.npcToZones[npcID] = db.npcToZones[npcID] or {}
+                for mapID in pairs(zones) do
+                    db.npcToZones[npcID][mapID] = true
+                end
+            end
+        end
+
+        -- Migrate legacy settings if defined
+        if BgLootLoggerDB.settings then
+            if BgLootLoggerDB.settings.modifierKey and not db.settings.modifierKeyLoot then
+                db.settings.modifierKeyLoot = BgLootLoggerDB.settings.modifierKey
+            end
+        end
+    end
+
+    -- Clean up any non-killed, non-looted, and non-harvested mobs from past sessions (e.g. vendors/friendly NPCs)
+    for mapID, zone in pairs(db.zones) do
+        for npcID, mob in pairs(zone.mobs or {}) do
+            if not mob.professions then
+                mob.professions = {
+                    totalHarvests = 0,
+                    emptyHarvests = 0,
+                    items = {},
+                    bySkill = {},
+                }
+            end
+            local hasLoot = (mob.loot and (mob.loot.totalLoots or 0) > 0) or ((mob.totalLoots or 0) > 0)
+            local hasKills = (mob.kills or 0) > 0
+            local hasHarvest = (mob.professions and (mob.professions.totalHarvests or 0) > 0)
+            if not hasLoot and not hasKills and not hasHarvest then
+                zone.mobs[npcID] = nil
+            end
+        end
+    end
+
+
+    -- Keep BgLootLoggerDB synchronized so existing backups remain valid
+    BgLootLoggerDB = db
+
+    self.db = db
+end
+
+-- Core factory: ensures Zone and Mob exist with the new Pokédex structure
+function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not npcID or npcID <= 0 then return nil end
+    if not self.db then self:InitDatabase() end
+    mapID = mapID or 0
+    zoneName = zoneName or "Unknown Zone"
+    mobName = mobName or ("Creature " .. npcID)
+
+    -- 1. Ensure Zone exists
+    local zone = self.db.zones[mapID]
+    if not zone then
+        zone = {
+            id = mapID,
+            name = zoneName,
+            mobs = {}
+        }
+        self.db.zones[mapID] = zone
+    elseif zoneName ~= "Unknown Zone" and (zone.name == "Unknown Zone" or not zone.name) then
+        zone.name = zoneName
+    end
+
+    -- 2. Reverse index NPC to Zone for cross-zone queries
+    self.db.npcToZones[npcID] = self.db.npcToZones[npcID] or {}
+    self.db.npcToZones[npcID][mapID] = true
+
+    -- 3. Ensure Mob exists
+    local mob = zone.mobs[npcID]
+    if not mob then
+        mob = {
+            npcID = npcID,
+            name = mobName,
+            classification = "normal",
+            creatureType = nil,
+            minLevel = nil,
+            maxLevel = nil,
+            encounters = 0,
+            kills = 0,
+            firstSeen = time(),
+            lastSeen = time(),
+            coords = {},
+            -- Sibling Child 1: Combat
+            combat = {
+                attacks = {
+                    swings = 0,
+                    minDmg = 0,
+                    maxDmg = 0,
+                    totalDmg = 0,
+                    avgDmg = 0,
+                    school = 1,
+                },
+                spells = {},
+                immunities = {},
+            },
+            -- Sibling Child 2: Loot
+            loot = {
+                totalLoots = 0,
+                emptyLoots = 0,
+                totalMoney = 0,
+                avgMoney = 0,
+                coords = {},
+                items = {},
+            },
+            -- Sibling Child 3: Professions (Skinning, Mining, Herbalism, Engineering)
+            professions = {
+                totalHarvests = 0,
+                emptyHarvests = 0,
+                items = {},
+                bySkill = {},
+            },
+        }
+        zone.mobs[npcID] = mob
+    else
+        if mobName and mobName ~= "" and not string.find(mobName, "^Creature %d+") then
+            mob.name = mobName
+        end
+        mob.lastSeen = time()
+    end
+
+    -- Structure guarantee
+    if not mob.combat then
+        mob.combat = {
+            attacks = { swings = 0, minDmg = 0, maxDmg = 0, totalDmg = 0, avgDmg = 0, school = 1 },
+            spells = {},
+            immunities = {},
+        }
+    end
+    if not mob.loot then
+        mob.loot = {
+            totalLoots = mob.totalLoots or 0,
+            emptyLoots = mob.emptyLoots or 0,
+            totalMoney = mob.totalMoney or 0,
+            avgMoney = mob.avgMoney or 0,
+            coords = mob.coords or {},
+            items = mob.items or {},
+        }
+    end
+    if not mob.professions then
+        mob.professions = {
+            totalHarvests = 0,
+            emptyHarvests = 0,
+            items = {},
+            bySkill = {},
+        }
+    end
+
+    -- Backward compatibility mirrors
+    mob.totalLoots = mob.loot.totalLoots
+    mob.avgMoney = mob.loot.avgMoney
+    mob.items = mob.loot.items
+
+    return mob, zone
+end
+
+-- Update creature metadata from unit inspection (target, mouseover, nameplates)
+function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    if classification and classification ~= "" then
+        mob.classification = classification
+    end
+
+    if creatureType and creatureType ~= "" then
+        mob.creatureType = creatureType
+    end
+
+    if level and level > 0 then
+        if not mob.minLevel or level < mob.minLevel then
+            mob.minLevel = level
+        end
+        if not mob.maxLevel or level > mob.maxLevel then
+            mob.maxLevel = level
+        end
+    end
+end
+
+-- Records a loot encounter for a mob in a zone
+function addon:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    itemsLooted = itemsLooted or {}
+    moneyCopper = moneyCopper or 0
+
+    local loot = mob.loot
+    loot.totalLoots = (loot.totalLoots or 0) + 1
+    mob.totalLoots = loot.totalLoots
+
+    local hasAnyItem = false
+    for _ in pairs(itemsLooted) do
+        hasAnyItem = true
+        break
+    end
+
+    if not hasAnyItem and moneyCopper == 0 then
+        loot.emptyLoots = (loot.emptyLoots or 0) + 1
+    end
+
+    -- Record Money
+    if moneyCopper > 0 then
+        loot.totalMoney = (loot.totalMoney or 0) + moneyCopper
+        loot.avgMoney = math.floor(loot.totalMoney / loot.totalLoots)
+        mob.avgMoney = loot.avgMoney
+    end
+
+    -- Record Coordinates (store up to 5 points)
+    if coords and coords.x and coords.y then
+        loot.coords = loot.coords or {}
+        local isDuplicate = false
+        for _, pt in ipairs(loot.coords) do
+            if math.abs(pt.x - coords.x) < 0.8 and math.abs(pt.y - coords.y) < 0.8 then
+                isDuplicate = true
+                break
+            end
+        end
+        if not isDuplicate then
+            table.insert(loot.coords, 1, { x = coords.x, y = coords.y, time = time() })
+            if #loot.coords > 5 then
+                table.remove(loot.coords)
+            end
+        end
+    end
+
+    -- Record Items Looted
+    for itemID, itemData in pairs(itemsLooted) do
+        local item = loot.items[itemID]
+        if not item then
+            item = {
+                id = itemID,
+                name = itemData.name or ("Item " .. itemID),
+                quality = itemData.quality or 1,
+                icon = itemData.icon,
+                itemLink = itemData.itemLink,
+                dropLootCount = 0,
+                totalQuantity = 0,
+                dropRatePercent = 0.0,
+                dropRateDecimal = 0.0,
+                dropChance = "0.0%"
+            }
+            loot.items[itemID] = item
+        else
+            if itemData.itemLink then item.itemLink = itemData.itemLink end
+            if itemData.icon then item.icon = itemData.icon end
+            if itemData.quality then item.quality = itemData.quality end
+            if itemData.name then item.name = itemData.name end
+        end
+
+        item.dropLootCount = (item.dropLootCount or 0) + 1
+        item.totalQuantity = (item.totalQuantity or 0) + (itemData.quantity or 1)
+    end
+
+    -- Recalculate drop percentages
+    for _, it in pairs(loot.items) do
+        local count = it.dropLootCount or 0
+        local rateDec = count / loot.totalLoots
+        local ratePct = rateDec * 100
+
+        it.dropRateDecimal = tonumber(string.format("%.3f", rateDec))
+        it.dropRatePercent = tonumber(string.format("%.1f", ratePct))
+        it.dropChance = string.format("%.1f%%", it.dropRatePercent)
+    end
+
+    mob.items = loot.items
+    return mob
+end
+
+-- Records a profession harvest (skinning, mining, herbalism, engineering) for a mob
+function addon:RecordProfessionLoot(mapID, zoneName, npcID, mobName, professionName, itemsLooted, coords)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    professionName = professionName or "Skinning"
+    itemsLooted = itemsLooted or {}
+
+    local prof = mob.professions
+    if not prof then
+        prof = {
+            totalHarvests = 0,
+            emptyHarvests = 0,
+            items = {},
+            bySkill = {},
+        }
+        mob.professions = prof
+    end
+
+    prof.totalHarvests = (prof.totalHarvests or 0) + 1
+    prof.bySkill = prof.bySkill or {}
+    prof.bySkill[professionName] = prof.bySkill[professionName] or { totalHarvests = 0, emptyHarvests = 0 }
+    prof.bySkill[professionName].totalHarvests = prof.bySkill[professionName].totalHarvests + 1
+
+    local hasAnyItem = false
+    for _ in pairs(itemsLooted) do
+        hasAnyItem = true
+        break
+    end
+
+    if not hasAnyItem then
+        prof.emptyHarvests = (prof.emptyHarvests or 0) + 1
+        prof.bySkill[professionName].emptyHarvests = prof.bySkill[professionName].emptyHarvests + 1
+    end
+
+    -- Record Coordinates (store up to 5 points)
+    if coords and coords.x and coords.y then
+        mob.coords = mob.coords or {}
+        local isDuplicate = false
+        for _, pt in ipairs(mob.coords) do
+            if math.abs(pt.x - coords.x) < 0.8 and math.abs(pt.y - coords.y) < 0.8 then
+                isDuplicate = true
+                break
+            end
+        end
+        if not isDuplicate then
+            table.insert(mob.coords, 1, { x = coords.x, y = coords.y, time = time() })
+            if #mob.coords > 5 then
+                table.remove(mob.coords)
+            end
+        end
+    end
+
+    -- Record Items Harvested
+    for itemID, itemData in pairs(itemsLooted) do
+        local item = prof.items[itemID]
+        if not item then
+            item = {
+                id = itemID,
+                name = itemData.name or ("Item " .. itemID),
+                quality = itemData.quality or 1,
+                icon = itemData.icon,
+                itemLink = itemData.itemLink,
+                dropLootCount = 0,
+                harvestCount = 0,
+                totalQuantity = 0,
+                dropRatePercent = 0.0,
+                dropRateDecimal = 0.0,
+                dropChance = "0.0%",
+                profession = professionName,
+            }
+            prof.items[itemID] = item
+        else
+            if itemData.itemLink then item.itemLink = itemData.itemLink end
+            if itemData.icon then item.icon = itemData.icon end
+            if itemData.quality then item.quality = itemData.quality end
+            if itemData.name then item.name = itemData.name end
+            item.profession = professionName
+        end
+
+        item.harvestCount = (item.harvestCount or 0) + 1
+        item.dropLootCount = item.harvestCount
+        item.totalQuantity = (item.totalQuantity or 0) + (itemData.quantity or 1)
+    end
+
+    -- Recalculate drop percentages
+    for _, it in pairs(prof.items) do
+        local count = it.dropLootCount or 0
+        local rateDec = count / prof.totalHarvests
+        local ratePct = rateDec * 100
+
+        it.dropRateDecimal = tonumber(string.format("%.3f", rateDec))
+        it.dropRatePercent = tonumber(string.format("%.1f", ratePct))
+        it.dropChance = string.format("%.1f%%", it.dropRatePercent)
+    end
+
+    mob.lastSeen = time()
+    return mob
+end
+
+-- Records Melee / Auto-Attacks performed by creature
+function addon:RecordMeleeAttack(mapID, zoneName, npcID, mobName, amount, school)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    local atk = mob.combat.attacks
+    atk.swings = (atk.swings or 0) + 1
+    school = school or 1
+    atk.school = school
+
+    amount = math.floor(amount or 0)
+    if amount > 0 then
+        if atk.minDmg == 0 or amount < atk.minDmg then
+            atk.minDmg = amount
+        end
+        if amount > atk.maxDmg then
+            atk.maxDmg = amount
+        end
+        atk.totalDmg = (atk.totalDmg or 0) + amount
+        atk.avgDmg = math.floor(atk.totalDmg / atk.swings)
+    end
+end
+
+-- Records a spell cast by creature
+function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    if not spellId then return end
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    local spell = mob.combat.spells[spellId]
+    if not spell then
+        spell = {
+            id = spellId,
+            name = spellName or ("Spell " .. spellId),
+            icon = icon or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spellId)) or GetSpellTexture(spellId) or "Interface\\Icons\\Spell_Holy_MagicalSentry",
+            school = spellSchool or 1,
+            casts = 0,
+            minDmg = 0,
+            maxDmg = 0,
+            totalDmg = 0,
+            avgDmg = 0,
+            isHeal = false,
+            isBuff = false,
+            isDebuff = false,
+        }
+        mob.combat.spells[spellId] = spell
+    end
+
+    spell.casts = (spell.casts or 0) + 1
+    if spellName and spellName ~= "" then spell.name = spellName end
+    if icon then spell.icon = icon end
+    if spellSchool then spell.school = spellSchool end
+end
+
+-- Records spell damage dealt by creature
+function addon:RecordSpellDamage(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, overkill, isPeriodic, icon)
+    if not spellId then return end
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    local spell = mob.combat.spells[spellId]
+    if not spell then return end
+
+    amount = math.floor(amount or 0)
+    if amount > 0 then
+        if spell.minDmg == 0 or amount < spell.minDmg then
+            spell.minDmg = amount
+        end
+        if amount > spell.maxDmg then
+            spell.maxDmg = amount
+        end
+        spell.totalDmg = (spell.totalDmg or 0) + amount
+        local hitCount = (spell.hits or 0) + 1
+        spell.hits = hitCount
+        spell.avgDmg = math.floor(spell.totalDmg / hitCount)
+    end
+end
+
+-- Records spell healing done by creature
+function addon:RecordSpellHeal(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, icon)
+    if not spellId then return end
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    local spell = mob.combat.spells[spellId]
+    if not spell then return end
+
+    spell.isHeal = true
+    amount = math.floor(amount or 0)
+    if amount > 0 then
+        if spell.minDmg == 0 or amount < spell.minDmg then
+            spell.minDmg = amount
+        end
+        if amount > spell.maxDmg then
+            spell.maxDmg = amount
+        end
+        spell.totalDmg = (spell.totalDmg or 0) + amount
+        local healCount = (spell.heals or 0) + 1
+        spell.heals = healCount
+        spell.avgDmg = math.floor(spell.totalDmg / healCount)
+    end
+end
+
+-- Records aura application by creature
+function addon:RecordSpellAura(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, auraType, icon)
+    if not spellId then return end
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    local spell = mob.combat.spells[spellId]
+    if not spell then return end
+
+    if auraType == "BUFF" then
+        spell.isBuff = true
+    elseif auraType == "DEBUFF" then
+        spell.isDebuff = true
+    end
+end
+
+-- Records an observed immunity on a creature
+function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immunityType, immunityName, school)
+    if not immunityKey or immunityKey == "" then return end
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+
+    local imm = mob.combat.immunities[immunityKey]
+    if not imm then
+        imm = {
+            key = immunityKey,
+            type = immunityType or "SCHOOL",
+            name = immunityName or immunityKey,
+            school = school,
+            count = 0,
+            firstSeen = time(),
+            lastSeen = time(),
+        }
+        mob.combat.immunities[immunityKey] = imm
+    end
+
+    imm.count = (imm.count or 0) + 1
+    imm.lastSeen = time()
+end
+
+-- Records a kill
+function addon:RecordKill(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    if not mob then return end
+    mob.kills = (mob.kills or 0) + 1
+end
+
+-- Retrieve mob data (current zone first, then cross-zone fallback)
+function addon:GetMobData(npcID, mapID)
+    if not npcID or not self.db or not self.db.zones then
+        return nil, nil, false
+    end
+
+    mapID = mapID or 0
+
+    -- Current zone check
+    if self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID] then
+        return self.db.zones[mapID].mobs[npcID], self.db.zones[mapID].name, true
+    end
+
+    -- Fallback: check cross-zone registry
+    if self.db.npcToZones and self.db.npcToZones[npcID] then
+        local bestMob = nil
+        local bestZoneName = "Other Zone"
+        local maxActivity = -1
+
+        for otherMapID in pairs(self.db.npcToZones[npcID]) do
+            local otherZone = self.db.zones[otherMapID]
+            if otherZone and otherZone.mobs and otherZone.mobs[npcID] then
+                local candidate = otherZone.mobs[npcID]
+                local activity = (candidate.loot and candidate.loot.totalLoots or 0) + (candidate.kills or 0)
+                if activity > maxActivity then
+                    maxActivity = activity
+                    bestMob = candidate
+                    bestZoneName = otherZone.name or ("Zone " .. otherMapID)
+                end
+            end
+        end
+
+        if bestMob then
+            return bestMob, bestZoneName, false
+        end
+    end
+
+    return nil, nil, false
+end
+
+-- Backward compatibility function for loot queries
+function addon:GetMobLootData(npcID, mapID)
+    return self:GetMobData(npcID, mapID)
+end
+
+-- Sorted Item List Helper
+function addon:GetSortedItemList(mob, maxItems, minQuality)
+    if not mob then return {} end
+    local items = (mob.loot and mob.loot.items) or mob.items
+    if not items then return {} end
+
+    maxItems = maxItems or (self.db and self.db.settings.maxItems) or 8
+    minQuality = minQuality or (self.db and self.db.settings.minQuality) or 0
+
+    local list = {}
+    for _, item in pairs(items) do
+        if (item.quality or 0) >= minQuality then
+            table.insert(list, item)
+        end
+    end
+
+    table.sort(list, function(a, b)
+        local rateA = a.dropRatePercent or 0
+        local rateB = b.dropRatePercent or 0
+        if rateA ~= rateB then
+            return rateA > rateB
+        end
+        local qtyA = a.totalQuantity or 0
+        local qtyB = b.totalQuantity or 0
+        if qtyA ~= qtyB then
+            return qtyA > qtyB
+        end
+        return (a.quality or 0) > (b.quality or 0)
+    end)
+
+    local result = {}
+    for i = 1, math.min(#list, maxItems) do
+        table.insert(result, list[i])
+    end
+
+    return result, #list
+end
+
+-- Sorted Profession Item List Helper
+function addon:GetSortedProfessionItemList(mob, maxItems, minQuality)
+    if not mob or not mob.professions then return {} end
+    local items = mob.professions.items
+    if not items then return {} end
+
+    maxItems = maxItems or (self.db and self.db.settings.maxItems) or 999
+    minQuality = minQuality or (self.db and self.db.settings.minQuality) or 0
+
+    local list = {}
+    for _, item in pairs(items) do
+        if (item.quality or 0) >= minQuality then
+            table.insert(list, item)
+        end
+    end
+
+    table.sort(list, function(a, b)
+        local rateA = a.dropRatePercent or 0
+        local rateB = b.dropRatePercent or 0
+        if rateA ~= rateB then
+            return rateA > rateB
+        end
+        local qtyA = a.totalQuantity or 0
+        local qtyB = b.totalQuantity or 0
+        if qtyA ~= qtyB then
+            return qtyA > qtyB
+        end
+        return (a.quality or 0) > (b.quality or 0)
+    end)
+
+    local result = {}
+    for i = 1, math.min(#list, maxItems) do
+        table.insert(result, list[i])
+    end
+
+    return result, #list
+end
+
+-- Sorted Spell List Helper (Always includes Auto Attack)
+function addon:GetSortedSpellList(mob, maxSpells)
+    if not mob or not mob.combat then return {} end
+    maxSpells = maxSpells or (self.db and self.db.settings.maxSpells) or 8
+
+    local list = {}
+
+    -- Auto Attack entry
+    table.insert(list, {
+        id = 6603,
+        name = "Auto Attack",
+        icon = "Interface\\Icons\\Ability_MeleeAttack",
+        school = 1,
+        schoolName = "Physical",
+        isAutoAttack = true,
+        casts = (mob.combat.attacks and mob.combat.attacks.swings and mob.combat.attacks.swings > 0 and mob.combat.attacks.swings) or 1,
+    })
+
+    for _, spell in pairs(mob.combat.spells or {}) do
+        table.insert(list, spell)
+    end
+
+    table.sort(list, function(a, b)
+        if a.isAutoAttack then return true end
+        if b.isAutoAttack then return false end
+        local castsA = a.casts or 0
+        local castsB = b.casts or 0
+        if castsA ~= castsB then
+            return castsA > castsB
+        end
+        return (a.avgDmg or 0) > (b.avgDmg or 0)
+    end)
+
+    local result = {}
+    for i = 1, math.min(#list, maxSpells) do
+        table.insert(result, list[i])
+    end
+
+    return result, #list
+end
+
+-- Immunities List Helper
+function addon:GetMobImmunities(mob)
+    if not mob or not mob.combat or not mob.combat.immunities then return {} end
+    local list = {}
+    for _, imm in pairs(mob.combat.immunities) do
+        table.insert(list, imm)
+    end
+    table.sort(list, function(a, b) return (a.count or 0) > (b.count or 0) end)
+    return list
+end
+
+-- Prints overall database status
+function addon:PrintStatus()
+    local totalZones = 0
+    local totalMobs = 0
+    local totalLoots = 0
+    local totalKills = 0
+    local totalItems = 0
+    local totalSpells = 0
+    local totalImmunities = 0
+    local seenItems = {}
+
+    for _, zone in pairs(self.db.zones or {}) do
+        totalZones = totalZones + 1
+        for _, mob in pairs(zone.mobs or {}) do
+            totalMobs = totalMobs + 1
+            totalKills = totalKills + (mob.kills or 0)
+            if mob.loot then
+                totalLoots = totalLoots + (mob.loot.totalLoots or 0)
+                for itemID in pairs(mob.loot.items or {}) do
+                    if not seenItems[itemID] then
+                        seenItems[itemID] = true
+                        totalItems = totalItems + 1
+                    end
+                end
+            end
+            if mob.professions then
+                totalHarvests = (totalHarvests or 0) + (mob.professions.totalHarvests or 0)
+                for itemID in pairs(mob.professions.items or {}) do
+                    if not seenItems[itemID] then
+                        seenItems[itemID] = true
+                        totalItems = totalItems + 1
+                    end
+                end
+            end
+            if mob.combat then
+                for _ in pairs(mob.combat.spells or {}) do
+                    totalSpells = totalSpells + 1
+                end
+                for _ in pairs(mob.combat.immunities or {}) do
+                    totalImmunities = totalImmunities + 1
+                end
+            end
+        end
+    end
+
+    self:Print("Creature Compendium Status:")
+    print(string.format("  Zones Logged: |cffffd100%d|r", totalZones))
+    print(string.format("  Creatures Registered: |cffffd100%d|r", totalMobs))
+    print(string.format("  Creature Kills Tracked: |cffffd100%d|r", totalKills))
+    print(string.format("  Loot Sessions: |cffffd100%d|r", totalLoots))
+    print(string.format("  Profession Harvests: |cffffd100%d|r", totalHarvests or 0))
+    print(string.format("  Distinct Items Tracked: |cffffd100%d|r", totalItems))
+    print(string.format("  Unique Spells Discovered: |cffffd100%d|r", totalSpells))
+    print(string.format("  Mob Immunities Verified: |cffffd100%d|r", totalImmunities))
+    print(string.format("  Loot Mod: |cffffd100%s|r  |  Combat Mod: |cffffd100%s|r  |  Prof Mod: |cffffd100%s|r",
+        self.db.settings.modifierKeyLoot or "SHIFT",
+        self.db.settings.modifierKeyCombat or "CTRL",
+        self.db.settings.modifierKeyProfession or "ALT"))
+end
+
+-- Search database for a mob by name and print stats to chat
+function addon:LookupMob(query)
+    query = string.lower(strtrim(query or ""))
+    if query == "" then return end
+
+    local matchesFound = 0
+    self:Print("Compendium search results for: |cffffd100%s|r", query)
+
+    for mapID, zone in pairs(self.db.zones or {}) do
+        for npcID, mob in pairs(zone.mobs or {}) do
+            local name = string.lower(mob.name or "")
+            if string.find(name, query, 1, true) then
+                matchesFound = matchesFound + 1
+                local meta = string.format("Level %s %s",
+                    mob.minLevel and (mob.minLevel == mob.maxLevel and mob.minLevel or (mob.minLevel .. "-" .. mob.maxLevel)) or "?",
+                    mob.classification and mob.classification ~= "normal" and ("[" .. mob.classification .. "]") or "")
+
+                print(string.format("  |cff00ff96%s|r (%s) in |cffffd100%s|r:", mob.name, meta, zone.name or "Zone"))
+
+                -- Immunities
+                local imms = self:GetMobImmunities(mob)
+                if #imms > 0 then
+                    local immStr = "    Immunities: "
+                    for _, imm in ipairs(imms) do
+                        local info = addon.IMMUNITY_COLORS[imm.key]
+                        local hex = info and info.hex or "ffffd100"
+                        immStr = immStr .. string.format("|cff%s[%s]|r ", hex, imm.name)
+                    end
+                    print(immStr)
+                end
+
+                -- Top Spells
+                local spells = self:GetSortedSpellList(mob, 3)
+                if #spells > 0 then
+                    local spellStr = "    Spells: "
+                    for _, sp in ipairs(spells) do
+                        spellStr = spellStr .. string.format("|cffffffff%s|r (%d casts) ", sp.name, sp.casts or 1)
+                    end
+                    print(spellStr)
+                end
+
+                -- Top Items
+                local items = self:GetSortedItemList(mob, 3, 0)
+                if #items > 0 then
+                    local itemStr = "    Top Drops: "
+                    for _, it in ipairs(items) do
+                        itemStr = itemStr .. string.format("%s (%s) ", addon:FormatQualityName(it.name, it.quality), it.dropChance or "0%")
+                    end
+                    print(itemStr)
+                end
+
+                -- Top Profession Drops
+                local profItems = self:GetSortedProfessionItemList(mob, 3, 0)
+                if #profItems > 0 then
+                    local profStr = "    Professions: "
+                    for _, it in ipairs(profItems) do
+                        profStr = profStr .. string.format("[%s] %s (%s) ", it.profession or "Skinning", addon:FormatQualityName(it.name, it.quality), it.dropChance or "0%")
+                    end
+                    print(profStr)
+                end
+
+                if matchesFound >= 5 then
+                    print("  |cff888888...more results truncated.|r")
+                    return
+                end
+            end
+        end
+    end
+
+    if matchesFound == 0 then
+        print("  |cffff2020No recorded creatures matching that name found.|r")
+    end
+end

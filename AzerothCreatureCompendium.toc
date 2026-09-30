@@ -1,0 +1,15 @@
+## Interface: 11504, 11505, 11506, 11503, 11404
+## Title: |cff00ff96Azeroth Creature Compendium|r
+## Notes: Comprehensive creature Pokédex tracking mob loot tables, auto-attacks, cast spells, and immunities via the combat log.
+## Author: Bryan
+## Version: 2.0.0
+## IconTexture: 133741
+## SavedVariables: AzerothCreatureCompendiumDB, BgLootLoggerDB
+
+Config.lua
+Database.lua
+CombatLog.lua
+Core.lua
+Tooltip.lua
+CompendiumWindow.lua
+Options.lua
