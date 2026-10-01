@@ -48,9 +48,26 @@ local function InitializeOptions()
 
     local hotkeyChoices = { "SHIFT", "CTRL", "ALT", "ALWAYS", "NEVER" }
     local ROW_LABEL_WIDTH = 130
-    local BTN_WIDTH = 62
+    local BTN_WIDTH = 66
     local BTN_HEIGHT = 22
     local BTN_GAP = 5
+
+    local function ApplySmallButtonFont(btn)
+        if not btn then return end
+        if GameFontNormalSmall then
+            btn:SetNormalFontObject(GameFontNormalSmall)
+        end
+        if GameFontHighlightSmall then
+            btn:SetHighlightFontObject(GameFontHighlightSmall)
+        end
+        if GameFontDisableSmall then
+            btn:SetDisabledFontObject(GameFontDisableSmall)
+        end
+        local fs = btn:GetFontString()
+        if fs and GameFontNormalSmall then
+            fs:SetFontObject(GameFontNormalSmall)
+        end
+    end
 
     local function FormatKeyText(keyVal, isSelected)
         if not isSelected then
@@ -76,6 +93,7 @@ local function InitializeOptions()
     for idx, keyVal in ipairs(hotkeyChoices) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
         btn:SetSize(BTN_WIDTH, BTN_HEIGHT)
+        ApplySmallButtonFont(btn)
         if idx == 1 then
             btn:SetPoint("LEFT", lootKeyLabel, "RIGHT", 10, 0)
         else
@@ -100,6 +118,7 @@ local function InitializeOptions()
     for idx, keyVal in ipairs(hotkeyChoices) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
         btn:SetSize(BTN_WIDTH, BTN_HEIGHT)
+        ApplySmallButtonFont(btn)
         if idx == 1 then
             btn:SetPoint("LEFT", combatKeyLabel, "RIGHT", 10, 0)
         else
@@ -124,6 +143,7 @@ local function InitializeOptions()
     for idx, keyVal in ipairs(hotkeyChoices) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
         btn:SetSize(BTN_WIDTH, BTN_HEIGHT)
+        ApplySmallButtonFont(btn)
         if idx == 1 then
             btn:SetPoint("LEFT", profKeyLabel, "RIGHT", 10, 0)
         else
@@ -177,6 +197,7 @@ local function InitializeOptions()
 
     local sidecarBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     sidecarBtn:SetSize(155, 22)
+    ApplySmallButtonFont(sidecarBtn)
     sidecarBtn:SetPoint("LEFT", layoutLabel, "RIGHT", 10, 0)
     sidecarBtn:SetText("Dedicated Sidecars")
     sidecarBtn:SetScript("OnClick", function()
@@ -187,6 +208,7 @@ local function InitializeOptions()
 
     local embeddedBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     embeddedBtn:SetSize(185, 22)
+    ApplySmallButtonFont(embeddedBtn)
     embeddedBtn:SetPoint("LEFT", sidecarBtn, "RIGHT", 6, 0)
     embeddedBtn:SetText("Embedded in Main Tooltip")
     embeddedBtn:SetScript("OnClick", function()
@@ -204,6 +226,7 @@ local function InitializeOptions()
 
     local anchorBlizzBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     anchorBlizzBtn:SetSize(155, 22)
+    ApplySmallButtonFont(anchorBlizzBtn)
     anchorBlizzBtn:SetPoint("LEFT", anchorLabel, "RIGHT", 10, 0)
     anchorBlizzBtn:SetText("Attached to Main")
     anchorBlizzBtn:SetScript("OnClick", function()
@@ -213,6 +236,7 @@ local function InitializeOptions()
 
     local anchorCursorBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     anchorCursorBtn:SetSize(185, 22)
+    ApplySmallButtonFont(anchorCursorBtn)
     anchorCursorBtn:SetPoint("LEFT", anchorBlizzBtn, "RIGHT", 6, 0)
     anchorCursorBtn:SetText("At Mouse Cursor")
     anchorCursorBtn:SetScript("OnClick", function()
@@ -229,6 +253,7 @@ local function InitializeOptions()
 
     local dockBesideBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     dockBesideBtn:SetSize(155, 22)
+    ApplySmallButtonFont(dockBesideBtn)
     dockBesideBtn:SetPoint("LEFT", dockLabel, "RIGHT", 10, 0)
     dockBesideBtn:SetText("Beside (Left/Right)")
     dockBesideBtn:SetScript("OnClick", function()
@@ -238,6 +263,7 @@ local function InitializeOptions()
 
     local dockAboveBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     dockAboveBtn:SetSize(185, 22)
+    ApplySmallButtonFont(dockAboveBtn)
     dockAboveBtn:SetPoint("LEFT", dockBesideBtn, "RIGHT", 6, 0)
     dockAboveBtn:SetText("Above / Below (Vertical)")
     dockAboveBtn:SetScript("OnClick", function()
