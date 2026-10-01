@@ -83,5 +83,6 @@ Before declaring any task complete or submitting a pull request, you **MUST** ru
    - ❌ **NO pull request references** (e.g., `Merge pull request #25 from ...`).
    - ❌ **NO commit SHAs or developer git jargon.**
 3. **Simple & Readable:** Keep release notes concise, clean, bulleted, and immediately understandable to a World of Warcraft player browsing the CurseForge app or website.
-4. **Annotated Release Tags:** When creating release tags for CI/CD packaging, always use annotated tags (`git tag -a vX.Y.Z -m "..."`) containing the clean player-facing bulleted summary so `BigWigsMods/packager` publishes clean notes directly to CurseForge and GitHub Releases.
+4. **CHANGELOG.md is Mandatory for CurseForge:** `BigWigsMods/packager` only publishes clean release notes to CurseForge if `CHANGELOG.md` exists at repository root (configured via `manual-changelog` in `.pkgmeta`). If `CHANGELOG.md` is missing, the packager silently falls back to running `git log` between tags, exposing internal commit messages, branch names, and issue closures. Always update `CHANGELOG.md` with the new player-facing version section prior to tagging.
+5. **Annotated Release Tags:** Always create annotated tags (`git tag -a vX.Y.Z -m "..."`) containing the clean release summary for GitHub Releases and git history clarity.
 
