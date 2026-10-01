@@ -195,9 +195,34 @@ local function InitializeOptions()
         addon:RefreshOptionsLayout()
     end)
 
-    -- Row 2: Sidecar Docking Orientation
+    -- Row 2: Tooltip Anchor Point (Blizzard Tooltip vs Mouse Cursor)
+    local anchorLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    anchorLabel:SetPoint("TOPLEFT", layoutLabel, "BOTTOMLEFT", 0, -8)
+    anchorLabel:SetSize(ROW_LABEL_WIDTH, 20)
+    anchorLabel:SetJustifyH("LEFT")
+    anchorLabel:SetText("Tooltip Anchor:")
+
+    local anchorBlizzBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    anchorBlizzBtn:SetSize(155, 22)
+    anchorBlizzBtn:SetPoint("LEFT", anchorLabel, "RIGHT", 10, 0)
+    anchorBlizzBtn:SetText("Attached to Main")
+    anchorBlizzBtn:SetScript("OnClick", function()
+        addon.db.settings.tooltipAnchor = "BLIZZARD"
+        addon:RefreshOptionsLayout()
+    end)
+
+    local anchorCursorBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    anchorCursorBtn:SetSize(185, 22)
+    anchorCursorBtn:SetPoint("LEFT", anchorBlizzBtn, "RIGHT", 6, 0)
+    anchorCursorBtn:SetText("At Mouse Cursor")
+    anchorCursorBtn:SetScript("OnClick", function()
+        addon.db.settings.tooltipAnchor = "CURSOR"
+        addon:RefreshOptionsLayout()
+    end)
+
+    -- Row 3: Sidecar Docking Orientation
     local dockLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    dockLabel:SetPoint("TOPLEFT", layoutLabel, "BOTTOMLEFT", 0, -8)
+    dockLabel:SetPoint("TOPLEFT", anchorLabel, "BOTTOMLEFT", 0, -8)
     dockLabel:SetSize(ROW_LABEL_WIDTH, 20)
     dockLabel:SetJustifyH("LEFT")
     dockLabel:SetText("Sidecar Docking:")
@@ -224,7 +249,9 @@ local function InitializeOptions()
         local s = self.db and self.db.settings
         local layout = (s and s.tooltipLayout) or "SIDECAR"
         local anchor = (s and s.sidecarAnchor) or "HORIZONTAL"
+        local tipAnchor = (s and s.tooltipAnchor) or "BLIZZARD"
 
+        -- 1. Layout Mode
         if layout == "SIDECAR" then
             sidecarBtn:SetText("|cff00ff96[Dedicated Sidecars]|r")
             embeddedBtn:SetText("|cffffffffEmbedded in Main Tooltip|r")
@@ -253,6 +280,15 @@ local function InitializeOptions()
             dockAboveBtn:SetAlpha(0.4)
             dockBesideBtn:SetText("|cff888888Beside (Left/Right)|r")
             dockAboveBtn:SetText("|cff888888Above / Below (Vertical)|r")
+        end
+
+        -- 2. Tooltip Anchor Point
+        if tipAnchor == "CURSOR" then
+            anchorBlizzBtn:SetText("|cffffffffAttached to Main|r")
+            anchorCursorBtn:SetText("|cffffd100[At Mouse Cursor]|r")
+        else
+            anchorBlizzBtn:SetText("|cffffd100[Attached to Main]|r")
+            anchorCursorBtn:SetText("|cffffffffAt Mouse Cursor|r")
         end
     end
 

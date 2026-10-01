@@ -42,6 +42,9 @@ function addon:InitDatabase()
     if db.settings.sidecarAnchor == nil then
         db.settings.sidecarAnchor = "HORIZONTAL"
     end
+    if db.settings.tooltipAnchor == nil then
+        db.settings.tooltipAnchor = "BLIZZARD"
+    end
 
     db.zones = db.zones or {}
     db.npcToZones = db.npcToZones or {}

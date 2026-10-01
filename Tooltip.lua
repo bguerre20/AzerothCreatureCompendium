@@ -336,13 +336,26 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
     local showProf = self:IsProfessionModActive()
 
     local activeTooltips = {}
+    local tipAnchor = (self.db and self.db.settings and self.db.settings.tooltipAnchor) or "BLIZZARD"
+
+    local function PrepareSidecar(tip, isShown)
+        if not isShown then
+            tip:Hide()
+            return false
+        end
+        local isLead = (tipAnchor == "CURSOR" and #activeTooltips == 0)
+        if isLead then
+            tip:SetOwner(UIParent, "ANCHOR_CURSOR")
+        else
+            tip:SetOwner(UIParent, "ANCHOR_NONE")
+            tip:ClearAllPoints()
+        end
+        tip:ClearLines()
+        return true
+    end
 
     -- 1. Setup Loot Tooltip
-    if showLoot then
-        lootTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        lootTooltip:ClearAllPoints()
-        lootTooltip:ClearLines()
-
+    if PrepareSidecar(lootTooltip, showLoot) then
         if mob then
             local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
             lootTooltip:AddLine(string.format("|cff00ff96%s Drops|r |cff888888(%d loots)|r", mob.name or "Mob", lootsCount))
@@ -357,16 +370,10 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
 
         lootTooltip:Show()
         table.insert(activeTooltips, lootTooltip)
-    else
-        lootTooltip:Hide()
     end
 
     -- 2. Setup Combat Tooltip
-    if showCombat then
-        combatTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        combatTooltip:ClearAllPoints()
-        combatTooltip:ClearLines()
-
+    if PrepareSidecar(combatTooltip, showCombat) then
         if mob then
             combatTooltip:AddLine(string.format("|cffe5c158%s - Combat Profile|r", mob.name or "Mob"))
             self:PopulateCombatContent(combatTooltip, mob)
@@ -379,16 +386,10 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
 
         combatTooltip:Show()
         table.insert(activeTooltips, combatTooltip)
-    else
-        combatTooltip:Hide()
     end
 
     -- 3. Setup Profession Tooltip
-    if showProf then
-        professionTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        professionTooltip:ClearAllPoints()
-        professionTooltip:ClearLines()
-
+    if PrepareSidecar(professionTooltip, showProf) then
         if mob then
             local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
             professionTooltip:AddLine(string.format("|cffc7a16b%s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or "Mob", harvestsCount))
@@ -403,21 +404,30 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
 
         professionTooltip:Show()
         table.insert(activeTooltips, professionTooltip)
-    else
-        professionTooltip:Hide()
     end
 
-    -- 4. Position active tooltips based on configured docking orientation
+    -- 4. Position active tooltips based on configured docking orientation and anchor type
+    if #activeTooltips == 0 then return end
+
     local anchorMode = (self.db and self.db.settings and self.db.settings.sidecarAnchor) or "HORIZONTAL"
-    local prevTip = GameTooltip
+    local prevTip = (tipAnchor == "CURSOR") and activeTooltips[1] or GameTooltip
+    local startIndex = (tipAnchor == "CURSOR") and 2 or 1
 
     if anchorMode == "VERTICAL" then
-        -- Vertical Stacking (Above or Below GameTooltip)
-        local tipTop = GameTooltip:GetTop() or 0
+        -- Vertical Stacking (Above or Below)
+        local tipTop
+        if tipAnchor == "CURSOR" then
+            local curY = select(2, GetCursorPosition()) / (UIParent:GetEffectiveScale() or 1)
+            tipTop = curY + 50
+        else
+            tipTop = GameTooltip:GetTop() or 0
+        end
+
         local screenHeight = GetScreenHeight() or 1080
         local stackBelow = tipTop > (screenHeight - 220)
 
-        for _, tip in ipairs(activeTooltips) do
+        for idx = startIndex, #activeTooltips do
+            local tip = activeTooltips[idx]
             tip:ClearAllPoints()
             if stackBelow then
                 tip:SetPoint("TOPLEFT", prevTip, "BOTTOMLEFT", 0, -4)
@@ -427,12 +437,20 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
             prevTip = tip
         end
     else
-        -- Horizontal Stacking (Beside GameTooltip: Left/Right dynamic clamp)
-        local rightEdge = GameTooltip:GetRight() or 0
+        -- Horizontal Stacking (Beside: Left/Right dynamic clamp)
+        local rightEdge
+        if tipAnchor == "CURSOR" then
+            local curX = GetCursorPosition() / (UIParent:GetEffectiveScale() or 1)
+            rightEdge = curX + 220
+        else
+            rightEdge = GameTooltip:GetRight() or 0
+        end
+
         local screenWidth = GetScreenWidth() or 1920
         local placeOnLeft = rightEdge > (screenWidth - 280)
 
-        for _, tip in ipairs(activeTooltips) do
+        for idx = startIndex, #activeTooltips do
+            local tip = activeTooltips[idx]
             tip:ClearAllPoints()
             if placeOnLeft then
                 tip:SetPoint("TOPRIGHT", prevTip, "TOPLEFT", -4, 0)
@@ -525,6 +543,14 @@ function addon:OnTooltipSetUnit(tooltip, data)
                 tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
                 tooltip:AddLine("  |cff888888Gather or skin this creature to discover profession loot.|r")
             end
+
+            if self.db.settings.tooltipAnchor == "CURSOR" then
+                local curX, curY = GetCursorPosition()
+                local effScale = UIParent:GetEffectiveScale() or 1
+                tooltip:ClearAllPoints()
+                tooltip:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (curX / effScale) + 16, (curY / effScale) + 16)
+            end
+
             tooltip:Show()
             return
         end
@@ -549,6 +575,13 @@ function addon:OnTooltipSetUnit(tooltip, data)
             local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
             tooltip:AddLine(string.format("|cffc7a16b[Compendium] %s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or unitName, harvestsCount))
             self:PopulateProfessionContent(tooltip, mob)
+        end
+
+        if self.db.settings.tooltipAnchor == "CURSOR" then
+            local curX, curY = GetCursorPosition()
+            local effScale = UIParent:GetEffectiveScale() or 1
+            tooltip:ClearAllPoints()
+            tooltip:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (curX / effScale) + 16, (curY / effScale) + 16)
         end
 
         tooltip:Show()

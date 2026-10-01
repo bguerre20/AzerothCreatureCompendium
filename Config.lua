@@ -34,6 +34,7 @@ addon.DEFAULT_SETTINGS = {
     separateTooltip = true,        -- Kept for backwards compatibility (true = SIDECAR, false = EMBEDDED)
     tooltipLayout = "SIDECAR",     -- "SIDECAR" or "EMBEDDED"
     sidecarAnchor = "HORIZONTAL",  -- "HORIZONTAL" (Beside: Left/Right dynamic) or "VERTICAL" (Above/Below)
+    tooltipAnchor = "BLIZZARD",    -- "BLIZZARD" (Attached to main tooltip) or "CURSOR" (At mouse cursor)
 
     -- Display Limits & Filters
     maxItems = 8,                  -- Top drops to show in tooltip (5, 10, 999 = all)
@@ -190,7 +191,7 @@ local function SlashCommandHandler(msg)
         else
             addon:Print("Usage: |cffffd100/acc layout <sidecar|embedded>|r")
         end
-    elseif cmd == "dock" or cmd == "anchor" or cmd == "docking" then
+    elseif cmd == "dock" or cmd == "docking" then
         local choice = string.upper(param or "")
         if choice == "BESIDE" or choice == "HORIZONTAL" or choice == "SIDE" then
             addon.db.settings.sidecarAnchor = "HORIZONTAL"
@@ -200,6 +201,17 @@ local function SlashCommandHandler(msg)
             addon:Print("Sidecar docking position set to: |cffffd100Above / Below Main Tooltip (Vertical)|r")
         else
             addon:Print("Usage: |cffffd100/acc dock <beside|above>|r")
+        end
+    elseif cmd == "anchor" or cmd == "targetanchor" or cmd == "point" then
+        local choice = string.upper(param or "")
+        if choice == "CURSOR" or choice == "MOUSE" then
+            addon.db.settings.tooltipAnchor = "CURSOR"
+            addon:Print("Tooltip anchor point set to: |cffffd100At Mouse Cursor|r")
+        elseif choice == "BLIZZARD" or choice == "MAIN" or choice == "TOOLTIP" then
+            addon.db.settings.tooltipAnchor = "BLIZZARD"
+            addon:Print("Tooltip anchor point set to: |cffffd100Attached to Main Tooltip|r")
+        else
+            addon:Print("Usage: |cffffd100/acc anchor <tooltip|cursor>|r")
         end
     elseif cmd == "max" or cmd == "top" or cmd == "limit" then
         local num = tonumber(param)
@@ -241,6 +253,7 @@ local function SlashCommandHandler(msg)
         print("  |cffffd100/acc combatkey <SHIFT|CTRL|ALT|ALWAYS|NEVER>|r - Set Combat tooltip activation")
         print("  |cffffd100/acc profkey <SHIFT|CTRL|ALT|ALWAYS|NEVER>|r - Set Profession tooltip activation")
         print("  |cffffd100/acc layout <sidecar|embedded>|r - Toggle dedicated sidecars vs embedded inside GameTooltip")
+        print("  |cffffd100/acc anchor <tooltip|cursor>|r - Set tooltip anchor to main tooltip or mouse cursor")
         print("  |cffffd100/acc dock <beside|above>|r - Set sidecar docking orientation")
         print("  |cffffd100/acc max <1-25>|r - Max drops shown in tooltip")
         print("  |cffffd100/acc lookup <name>|r - Search recorded creature by name")

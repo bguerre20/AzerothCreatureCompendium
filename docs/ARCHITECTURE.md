@@ -110,9 +110,9 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
 | **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
-| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`) and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
+| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`) and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree, 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
-| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
+| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
 
 ---
 
@@ -302,6 +302,7 @@ AzerothCreatureCompendiumDB
 │     ├── modifierKeyCombat: "SHIFT" | "CTRL" | "ALT" | "ALWAYS" | "NEVER"
 │     ├── modifierKeyProfession: "SHIFT" | "CTRL" | "ALT" | "ALWAYS" | "NEVER"
 │     ├── tooltipLayout: "SIDECAR" | "EMBEDDED"
+│     ├── tooltipAnchor: "BLIZZARD" | "CURSOR"
 │     ├── sidecarAnchor: "HORIZONTAL" | "VERTICAL"
 │     ├── separateTooltip: boolean (legacy alias)
 │     ├── maxItems: number
