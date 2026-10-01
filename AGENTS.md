@@ -69,3 +69,19 @@ Before declaring any task complete or submitting a pull request, you **MUST** ru
 2. **Commit Convention:** Use Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`).
 3. **Issue Linking:** Reference issue numbers in commits and pull requests (e.g., `Closes #12`).
 4. **Deploy & Validate:** Always test using `powershell -ExecutionPolicy Bypass -File .\deploy.ps1` before proposing changes.
+
+---
+
+## 📝 User-Facing Changelogs & CurseForge Release Standards
+
+**All release notes, CurseForge changelogs, and addon update descriptions must be written strictly for players and end-users.**
+
+1. **Player-Centric Summaries Only:** Focus solely on what is new, what changed, or what bug was fixed from a player's in-game perspective (e.g. *"Added option to embed creature data directly inside the default Blizzard tooltip"*, *"Added Always and Never activation modes for loot, combat, and profession tooltips"*, *"Added vertical sidecar docking (Above / Below)"*).
+2. **Zero Internal Repository Metadata:** Never include internal GitHub repository details in public changelogs:
+   - ❌ **NO issue numbers or closure syntax** (e.g., `Closes #22`, `Fixes #14`, `#8`).
+   - ❌ **NO branch names** (e.g., `feat/22-tooltip-sidecar-options`).
+   - ❌ **NO pull request references** (e.g., `Merge pull request #25 from ...`).
+   - ❌ **NO commit SHAs or developer git jargon.**
+3. **Simple & Readable:** Keep release notes concise, clean, bulleted, and immediately understandable to a World of Warcraft player browsing the CurseForge app or website.
+4. **Annotated Release Tags:** When creating release tags for CI/CD packaging, always use annotated tags (`git tag -a vX.Y.Z -m "..."`) containing the clean player-facing bulleted summary so `BigWigsMods/packager` publishes clean notes directly to CurseForge and GitHub Releases.
+
