@@ -1,4 +1,4 @@
-## Interface: 11504, 11505, 11506, 11503, 11404
+## Interface: 11506, 11505, 11504, 11503, 11404, 16001
 ## Title: |cff00ff96Azeroth Creature Compendium|r
 ## Notes: Comprehensive creature Pokédex tracking mob loot tables, auto-attacks, cast spells, and immunities via the combat log.
 ## Author: Bryan

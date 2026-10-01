@@ -1,7 +1,7 @@
 # Azeroth Creature Compendium - System Architecture
 
-> **Document Version:** 1.0.0  
-> **Target Environment:** World of Warcraft Classic (Interface: 11504, 11505, 11506, 11503, 11404)  
+> **Document Version:** 1.0.1  
+> **Target Environment:** World of Warcraft Classic & Forever Beta (Interface: 11506, 11505, 11504, 11503, 11404, 16001)  
 > **Status:** Active / Production  
 > **Audience:** Senior Architects, Junior Developers, Executives, and AI Coding Agents
 
