@@ -116,6 +116,5 @@ Use `/acc`, `/compendium`, `/pokedex`, or the legacy aliases `/bgl` / `/bgloot`:
 
 ---
 
-## 🔄 Automatic Data Migration & Pre-Seeded Mobs
+## 🔄 Automatic Data Migration
 - **Legacy Migration:** If you previously used `BgLootLogger`, your existing database (`BgLootLoggerDB`) is **automatically detected and migrated** into `AzerothCreatureCompendiumDB` on first launch with zero data loss.
-- **Out-of-the-Box Demo:** On first launch, the compendium pre-seeds preview mobs in Dun Morogh (**Timber** [Rare] demonstrating silver styling and coordinates, and **Vagash** [Elite] demonstrating gold styling) so users can immediately test the UI.

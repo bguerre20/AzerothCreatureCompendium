@@ -117,76 +117,31 @@ function addon:InitDatabase()
     end
 
 
+    -- Purge legacy demo test mobs if present from previous builds
+    for mapID, zone in pairs(db.zones) do
+        for npcID, mob in pairs(zone.mobs or {}) do
+            local isDemoTimber = (npcID == 1132 and (mob.kills or 0) == 0 and (not mob.loot or (mob.loot.totalLoots or 0) == 0))
+            local isDemoVagash = (npcID == 1388 and mob.combat and mob.combat.attacks and mob.combat.attacks.avgDmg == 52 and mob.combat.attacks.totalDmg == 310 and mob.loot and mob.loot.totalMoney == 180 and (not mob.loot.items or next(mob.loot.items) == nil))
+            if isDemoTimber or isDemoVagash then
+                zone.mobs[npcID] = nil
+                if db.npcToZones and db.npcToZones[npcID] then
+                    db.npcToZones[npcID][mapID] = nil
+                    if next(db.npcToZones[npcID]) == nil then
+                        db.npcToZones[npcID] = nil
+                    end
+                end
+            end
+        end
+        -- Remove empty zones if all mobs were pruned
+        if zone.mobs and next(zone.mobs) == nil then
+            db.zones[mapID] = nil
+        end
+    end
+
     -- Keep BgLootLoggerDB synchronized so existing backups remain valid
     BgLootLoggerDB = db
 
     self.db = db
-
-    -- Seed test mobs for Dun Morogh (Rare & Elite preview)
-    self:SeedDunMoroghTestMobs()
-end
-
--- Preview test mobs in Dun Morogh (one Rare spawn and one Elite)
-function addon:SeedDunMoroghTestMobs()
-    if not self.db or not self.db.zones then return end
-
-    -- Find Dun Morogh zone (or Coldridge Valley)
-    local targetMapID = nil
-    for mapID, zone in pairs(self.db.zones) do
-        if zone.name and (zone.name:find("Dun Morogh") or zone.name:find("Coldridge")) then
-            targetMapID = mapID
-            break
-        end
-    end
-
-    if not targetMapID then
-        -- Default to mapID 1426 (Dun Morogh)
-        targetMapID = 1426
-        self.db.zones[targetMapID] = {
-            id = targetMapID,
-            name = "Dun Morogh",
-            mobs = {}
-        }
-    end
-
-    local zone = self.db.zones[targetMapID]
-
-    -- 1. Rare Test Mob: Timber (Silver font, single coordinates, [Rare] tag)
-    if not zone.mobs[1132] then
-        zone.mobs[1132] = {
-            npcID = 1132,
-            name = "Timber",
-            classification = "rare",
-            creatureType = "Beast",
-            minLevel = 10,
-            maxLevel = 10,
-            kills = 0,
-            coords = { { x = 47.8, y = 43.4, time = time() } },
-            loot = { totalLoots = 0, items = {}, coords = { { x = 47.8, y = 43.4, time = time() } } },
-            combat = { attacks = { swings = 0, minDmg = 18, maxDmg = 26, avgDmg = 22 }, spells = {}, immunities = {} },
-            professions = { totalHarvests = 0, items = {}, bySkill = {} }
-        }
-        self.db.npcToZones[1132] = self.db.npcToZones[1132] or {}
-        self.db.npcToZones[1132][targetMapID] = true
-    end
-
-    -- 2. Elite Test Mob: Vagash (Gold font, no coordinates)
-    if not zone.mobs[1388] then
-        zone.mobs[1388] = {
-            npcID = 1388,
-            name = "Vagash",
-            classification = "elite",
-            creatureType = "Beast",
-            minLevel = 11,
-            maxLevel = 11,
-            kills = 1,
-            combat = { attacks = { swings = 6, minDmg = 42, maxDmg = 65, totalDmg = 310, avgDmg = 52 }, spells = {}, immunities = {} },
-            loot = { totalLoots = 1, totalMoney = 180, avgMoney = 180, items = {} },
-            professions = { totalHarvests = 0, items = {}, bySkill = {} }
-        }
-        self.db.npcToZones[1388] = self.db.npcToZones[1388] or {}
-        self.db.npcToZones[1388][targetMapID] = true
-    end
 end
 
 -- Core factory: ensures Zone and Mob exist with the new Pokédex structure
