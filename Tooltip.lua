@@ -57,13 +57,47 @@ addon.professionTooltip = professionTooltip
 
 -- Check key modifier state
 local function CheckModifier(modKey, alwaysShow)
-    if alwaysShow then return true end
+    if modKey == "NEVER" then return false end
+    if modKey == "ALWAYS" or modKey == "NONE" or alwaysShow then return true end
     modKey = modKey or "SHIFT"
-    if modKey == "NONE" then return true end
     if modKey == "SHIFT" then return IsShiftKeyDown() end
     if modKey == "CTRL" then return IsControlKeyDown() end
     if modKey == "ALT" then return IsAltKeyDown() end
     return false
+end
+
+function addon:IsEmbeddedLayout()
+    local s = self.db and self.db.settings
+    if not s then return false end
+    if s.tooltipLayout == "EMBEDDED" then return true end
+    if s.separateTooltip == false then return true end
+    return false
+end
+
+function addon:GetTooltipHintText(showLoot, showCombat, showProf)
+    if not self.db or not self.db.settings or not self.db.settings.showHint then
+        return nil
+    end
+
+    local lootKey = self.db.settings.modifierKeyLoot or "SHIFT"
+    local combatKey = self.db.settings.modifierKeyCombat or "CTRL"
+    local profKey = self.db.settings.modifierKeyProfession or "ALT"
+
+    local hintParts = {}
+    if lootKey ~= "ALWAYS" and lootKey ~= "NEVER" and not showLoot then
+        table.insert(hintParts, string.format("[|cffffd100%s|r] Loot", lootKey))
+    end
+    if combatKey ~= "ALWAYS" and combatKey ~= "NEVER" and not showCombat then
+        table.insert(hintParts, string.format("[|cffffd100%s|r] Combat", combatKey))
+    end
+    if profKey ~= "ALWAYS" and profKey ~= "NEVER" and not showProf then
+        table.insert(hintParts, string.format("[|cffffd100%s|r] Prof", profKey))
+    end
+
+    if #hintParts > 0 then
+        return "|cff00ff96[Compendium]|r |cff888888Hold " .. table.concat(hintParts, "  ") .. "|r"
+    end
+    return nil
 end
 
 function addon:IsLootModActive()
@@ -286,11 +320,11 @@ function addon:PopulateCombatContent(tip, mob)
 end
 
 -------------------------------------------------------------------------------
--- Dual Companion Sidecar Positioning
+-- Dual Companion Sidecar Positioning & Layout Engine
 -------------------------------------------------------------------------------
 
 function addon:UpdateCompanionTooltips(mob, unrecordedName)
-    if (not mob and not unrecordedName) or not GameTooltip:IsShown() then
+    if self:IsEmbeddedLayout() or ((not mob and not unrecordedName) or not GameTooltip:IsShown()) then
         lootTooltip:Hide()
         combatTooltip:Hide()
         professionTooltip:Hide()
@@ -300,11 +334,6 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
     local showLoot = self:IsLootModActive()
     local showCombat = self:IsCombatModActive()
     local showProf = self:IsProfessionModActive()
-
-    -- Determine orientation based on GameTooltip screen position
-    local rightEdge = GameTooltip:GetRight() or 0
-    local screenWidth = GetScreenWidth() or 1920
-    local placeOnLeft = rightEdge > (screenWidth - 280)
 
     local activeTooltips = {}
 
@@ -378,16 +407,40 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
         professionTooltip:Hide()
     end
 
-    -- 4. Position active tooltips sequentially (sidecars)
+    -- 4. Position active tooltips based on configured docking orientation
+    local anchorMode = (self.db and self.db.settings and self.db.settings.sidecarAnchor) or "HORIZONTAL"
     local prevTip = GameTooltip
-    for idx, tip in ipairs(activeTooltips) do
-        tip:ClearAllPoints()
-        if placeOnLeft then
-            tip:SetPoint("TOPRIGHT", prevTip, "TOPLEFT", -4, 0)
-        else
-            tip:SetPoint("TOPLEFT", prevTip, "TOPRIGHT", 4, 0)
+
+    if anchorMode == "VERTICAL" then
+        -- Vertical Stacking (Above or Below GameTooltip)
+        local tipTop = GameTooltip:GetTop() or 0
+        local screenHeight = GetScreenHeight() or 1080
+        local stackBelow = tipTop > (screenHeight - 220)
+
+        for _, tip in ipairs(activeTooltips) do
+            tip:ClearAllPoints()
+            if stackBelow then
+                tip:SetPoint("TOPLEFT", prevTip, "BOTTOMLEFT", 0, -4)
+            else
+                tip:SetPoint("BOTTOMLEFT", prevTip, "TOPLEFT", 0, 4)
+            end
+            prevTip = tip
         end
-        prevTip = tip
+    else
+        -- Horizontal Stacking (Beside GameTooltip: Left/Right dynamic clamp)
+        local rightEdge = GameTooltip:GetRight() or 0
+        local screenWidth = GetScreenWidth() or 1920
+        local placeOnLeft = rightEdge > (screenWidth - 280)
+
+        for _, tip in ipairs(activeTooltips) do
+            tip:ClearAllPoints()
+            if placeOnLeft then
+                tip:SetPoint("TOPRIGHT", prevTip, "TOPLEFT", -4, 0)
+            else
+                tip:SetPoint("TOPLEFT", prevTip, "TOPRIGHT", 4, 0)
+            end
+            prevTip = tip
+        end
     end
 end
 
@@ -440,15 +493,75 @@ function addon:OnTooltipSetUnit(tooltip, data)
     local showCombat = self:IsCombatModActive()
     local showProf = self:IsProfessionModActive()
 
+    -- Check if player selected Embedded layout mode (single merged tooltip)
+    if self:IsEmbeddedLayout() then
+        lootTooltip:Hide()
+        combatTooltip:Hide()
+        professionTooltip:Hide()
+
+        local hintText = self:GetTooltipHintText(showLoot, showCombat, showProf)
+
+        if not mob then
+            tooltip:AddLine("|cff00ff96[Compendium]|r |cff888888New creature — No encounters recorded yet|r")
+            if hintText then
+                tooltip:AddLine(hintText)
+            end
+
+            if showLoot then
+                tooltip:AddLine(" ")
+                tooltip:AddLine(string.format("|cff00ff96[Compendium] %s Drops|r", unitName))
+                tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
+                tooltip:AddLine("  |cff888888Defeat and loot to record item drops.|r")
+            end
+            if showCombat then
+                tooltip:AddLine(" ")
+                tooltip:AddLine(string.format("|cffe5c158[Compendium] %s - Combat Profile|r", unitName))
+                tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
+                tooltip:AddLine("  |cff888888Engage in combat to discover attacks, spells, and immunities.|r")
+            end
+            if showProf then
+                tooltip:AddLine(" ")
+                tooltip:AddLine(string.format("|cffc7a16b[Compendium] %s - Profession Loot|r", unitName))
+                tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
+                tooltip:AddLine("  |cff888888Gather or skin this creature to discover profession loot.|r")
+            end
+            tooltip:Show()
+            return
+        end
+
+        if hintText then
+            tooltip:AddLine(hintText)
+        end
+
+        if showLoot then
+            tooltip:AddLine(" ")
+            local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
+            tooltip:AddLine(string.format("|cff00ff96[Compendium] %s Drops|r |cff888888(%d loots)|r", mob.name or unitName, lootsCount))
+            self:PopulateLootContent(tooltip, mob)
+        end
+        if showCombat then
+            tooltip:AddLine(" ")
+            tooltip:AddLine(string.format("|cffe5c158[Compendium] %s - Combat Profile|r", mob.name or unitName))
+            self:PopulateCombatContent(tooltip, mob)
+        end
+        if showProf then
+            tooltip:AddLine(" ")
+            local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
+            tooltip:AddLine(string.format("|cffc7a16b[Compendium] %s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or unitName, harvestsCount))
+            self:PopulateProfessionContent(tooltip, mob)
+        end
+
+        tooltip:Show()
+        return
+    end
+
+    -- Dedicated Sidecars Layout Mode
     if not mob then
-        -- Issue #24: First mob encounter - inform player and render discovery status
+        -- First mob encounter - inform player and render discovery status
         tooltip:AddLine("|cff00ff96[Compendium]|r |cff888888New creature — No encounters recorded yet|r")
 
-        if self.db.settings.showHint and (not showLoot or not showCombat or not showProf) then
-            local lootKey = self.db.settings.modifierKeyLoot or "SHIFT"
-            local combatKey = self.db.settings.modifierKeyCombat or "CTRL"
-            local profKey = self.db.settings.modifierKeyProfession or "ALT"
-            local hintText = string.format("|cff00ff96[Compendium]|r |cff888888Hold [|r|cffffd100%s|r|cff888888] Loot  [|r|cffffd100%s|r|cff888888] Combat  [|r|cffffd100%s|r|cff888888] Prof|r", lootKey, combatKey, profKey)
+        local hintText = self:GetTooltipHintText(showLoot, showCombat, showProf)
+        if hintText then
             tooltip:AddLine(hintText)
         end
 
@@ -456,12 +569,9 @@ function addon:OnTooltipSetUnit(tooltip, data)
         return
     end
 
-    -- Add hint lines to GameTooltip if hints enabled and not all hotkeys held
-    if self.db.settings.showHint and (not showLoot or not showCombat or not showProf) then
-        local lootKey = self.db.settings.modifierKeyLoot or "SHIFT"
-        local combatKey = self.db.settings.modifierKeyCombat or "CTRL"
-        local profKey = self.db.settings.modifierKeyProfession or "ALT"
-        local hintText = string.format("|cff00ff96[Compendium]|r |cff888888Hold [|r|cffffd100%s|r|cff888888] Loot  [|r|cffffd100%s|r|cff888888] Combat  [|r|cffffd100%s|r|cff888888] Prof|r", lootKey, combatKey, profKey)
+    -- Add dynamic hint line to GameTooltip if hints enabled and hotkeys remain to be pressed
+    local hintText = self:GetTooltipHintText(showLoot, showCombat, showProf)
+    if hintText then
         tooltip:AddLine(hintText)
     end
 
@@ -490,29 +600,40 @@ end
 local modWatcher = CreateFrame("Frame", "AzerothCompendiumModWatcher")
 modWatcher:RegisterEvent("MODIFIER_STATE_CHANGED")
 modWatcher:SetScript("OnEvent", function(self, event)
-    if GameTooltip:IsShown() then
-        local _, unit = GameTooltip:GetUnit()
-        if not unit and UnitExists("mouseover") then
-            unit = "mouseover"
-        end
-        if unit and UnitExists(unit) then
-            local guid = UnitGUID(unit)
-            local npcID = addon:GetNPCIDFromGUID(guid)
-            if not npcID then
-                lootTooltip:Hide()
-                combatTooltip:Hide()
-                professionTooltip:Hide()
-                return
-            end
+    if not GameTooltip:IsShown() then
+        if lootTooltip then lootTooltip:Hide() end
+        if combatTooltip then combatTooltip:Hide() end
+        if professionTooltip then professionTooltip:Hide() end
+        return
+    end
 
-            local mapID = C_Map.GetBestMapForUnit("player") or 0
-            local mob = addon:GetMobData(npcID, mapID)
-            local unitName = UnitName(unit) or "Creature"
-            addon:UpdateCompanionTooltips(mob, unitName)
-        else
+    local _, unit = GameTooltip:GetUnit()
+    if not unit and UnitExists("mouseover") then
+        unit = "mouseover"
+    end
+
+    if unit and UnitExists(unit) then
+        local guid = UnitGUID(unit)
+        local npcID = addon:GetNPCIDFromGUID(guid)
+        if not npcID then
             lootTooltip:Hide()
             combatTooltip:Hide()
             professionTooltip:Hide()
+            return
+        end
+
+        local mapID = C_Map.GetBestMapForUnit("player") or 0
+        local mob = addon:GetMobData(npcID, mapID)
+        local unitName = UnitName(unit) or "Creature"
+
+        if addon:IsEmbeddedLayout() then
+            if not addon.isRefreshingTip then
+                addon.isRefreshingTip = true
+                GameTooltip:SetUnit(unit)
+                addon.isRefreshingTip = false
+            end
+        else
+            addon:UpdateCompanionTooltips(mob, unitName)
         end
     else
         lootTooltip:Hide()

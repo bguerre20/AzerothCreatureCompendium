@@ -65,10 +65,10 @@ graph TD
     end
 
     subgraph Presentation_Layer["User Presentation Layer"]
-        TOOLTIPS["Tooltip Sidecars (Tooltip.lua)<br/>• Loot Tooltip [SHIFT]<br/>• Combat Tooltip [CTRL]<br/>• Profession Tooltip [ALT]"]
+        TOOLTIPS["Tooltip Engine (Tooltip.lua)<br/>• Sidecars (Beside / Above)<br/>• Embedded in GameTooltip<br/>• Modes: SHIFT/CTRL/ALT/ALWAYS/NEVER"]
         WINDOW["Pokédex Browser (CompendiumWindow.lua)<br/>• Left Tree Explorer (Zone/Mob)<br/>• Interactive 3D Model<br/>• Tabs: Combat / Loot / Profs"]
         MINIMAP["Draggable Minimap Button"]
-        SETTINGS["Blizzard Interface Settings (Options.lua)"]
+        SETTINGS["Blizzard Interface Settings (Options.lua)<br/>• 5-Choice Mode Selectors<br/>• Layout & Docking Selectors"]
     end
 
     %% Event Connections
@@ -110,9 +110,9 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
 | **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
-| **5** | [Tooltip.lua](../Tooltip.lua) | Tri-sidecar companion tooltips (Loot, Combat, Professions) anchored next to Blizzard's native `GameTooltip` with live modifier detection, dynamic screen clamping, and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
+| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`) and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree, 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
-| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterAddOnCategory`), UI sliders, dropdowns, and keybinding selectors with live updates. | `addon:CreateOptionsPanel()` |
+| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
 
 ---
 
@@ -226,9 +226,9 @@ sequenceDiagram
 
 ---
 
-### 4. Sidecar Tooltip Multi-Docking Engine
+### 4. Dual Tooltip Layout & Docking Engine
 
-When the player hovers over a creature in the 3D world or unit frame, the compendium anchors up to three dedicated sidecars without overlapping or obscuring Blizzard's `GameTooltip`.
+When the player hovers over a creature in the 3D world or unit frame, the compendium dynamically evaluates the player's configured layout (`SIDECAR` vs `EMBEDDED`) and activation modes (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`).
 
 ```mermaid
 sequenceDiagram
@@ -244,37 +244,43 @@ sequenceDiagram
     Tooltip->>Tooltip: Extract unit GUID & NPC ID
     Tooltip->>DB: GetMobData(npcID, currentMapID)
 
-    alt Mob Record Found in Database
-        DB-->>Tooltip: Return mob record & zone data
-        opt showHint enabled and hotkeys not all active
-            Tooltip->>BlizzardTT: Render "[Compendium] Hold [SHIFT] Loot [CTRL] Combat [ALT] Prof"
+    alt Embedded Layout Mode (separateTooltip == false or tooltipLayout == "EMBEDDED")
+        Tooltip->>Tooltip: Hide dedicated sidecars
+        opt showHint enabled and hotkeys pending
+            Tooltip->>BlizzardTT: Render "[Compendium] Hold [KEY] Category" dynamic hints
         end
-        Tooltip->>Tooltip: Evaluate Modifier Keys (IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown)
+        opt Loot Active (ALWAYS or SHIFT held)
+            Tooltip->>BlizzardTT: AddLine("[Compendium] Drops") & PopulateLootContent()
+        end
+        opt Combat Active (ALWAYS or CTRL held)
+            Tooltip->>BlizzardTT: AddLine("[Compendium] Combat Profile") & PopulateCombatContent()
+        end
+        opt Profession Active (ALWAYS or ALT held)
+            Tooltip->>BlizzardTT: AddLine("[Compendium] Profession Loot") & PopulateProfessionContent()
+        end
+        Tooltip->>BlizzardTT: BlizzardTT:Show()
+    else Dedicated Sidecar Layout Mode (tooltipLayout == "SIDECAR")
+        opt showHint enabled and hotkeys pending
+            Tooltip->>BlizzardTT: Render dynamic hotkey hints
+        end
+        par Evaluate Active Sidecars
+            opt Loot Active (ALWAYS or SHIFT held)
+                Tooltip->>Tooltip: Populate Loot Sidecar
+            end
+        and Evaluate Combat Active
+            opt Combat Active (ALWAYS or CTRL held)
+                Tooltip->>Tooltip: Populate Combat Sidecar
+            end
+        and Evaluate Profession Active
+            opt Profession Active (ALWAYS or ALT held)
+                Tooltip->>Tooltip: Populate Profession Sidecar
+            end
+        end
 
-        par Show Loot Tooltip
-            opt Shift held or alwaysShowLoot enabled
-                Tooltip->>Tooltip: Anchor Loot Sidecar to GameTooltip (RIGHT/LEFT dynamic clamp)
-                Tooltip->>Tooltip: Render drop rates %, item qualities, and coin stats
-            end
-        and Show Combat Tooltip
-            opt Ctrl held or alwaysShowCombat enabled
-                Tooltip->>Tooltip: Anchor Combat Sidecar (stacks beside Loot Sidecar)
-                Tooltip->>Tooltip: Render immunity badges, swing damage, and spells
-            end
-        and Show Profession Tooltip
-            opt Alt held or alwaysShowProfession enabled
-                Tooltip->>Tooltip: Anchor Profession Sidecar (stacks beside active Sidecars)
-                Tooltip->>Tooltip: Render gathered materials %, harvests, and skill tags
-            end
-        end
-    else Mob Not Yet Recorded (First Encounter Discovery)
-        DB-->>Tooltip: nil (creature not yet observed or cataloged)
-        Tooltip->>BlizzardTT: Render "[Compendium] New creature — No encounters recorded yet"
-        opt showHint enabled
-            Tooltip->>BlizzardTT: Render hotkey hints
-        end
-        opt Modifier Key Held or Real-Time Press (MODIFIER_STATE_CHANGED)
-            Tooltip->>Tooltip: Anchor placeholder sidecars with helpful discovery prompts ("No drops / combat / gathering recorded yet")
+        alt Docking Mode: HORIZONTAL (Beside)
+            Tooltip->>Tooltip: Dynamic clamp (Right/Left) beside GameTooltip
+        else Docking Mode: VERTICAL (Above/Below)
+            Tooltip->>Tooltip: Stack above GameTooltip (or below if top boundary reached)
         end
     end
     deactivate Tooltip
@@ -291,7 +297,22 @@ All persistent data is consolidated into a single SavedVariable dictionary: `Aze
 ```text
 AzerothCreatureCompendiumDB
 ├── version: number (e.g. 2)
-├── settings: table (Modifier keys, display limits, minimap settings)
+├── settings: table
+│     ├── modifierKeyLoot: "SHIFT" | "CTRL" | "ALT" | "ALWAYS" | "NEVER"
+│     ├── modifierKeyCombat: "SHIFT" | "CTRL" | "ALT" | "ALWAYS" | "NEVER"
+│     ├── modifierKeyProfession: "SHIFT" | "CTRL" | "ALT" | "ALWAYS" | "NEVER"
+│     ├── tooltipLayout: "SIDECAR" | "EMBEDDED"
+│     ├── sidecarAnchor: "HORIZONTAL" | "VERTICAL"
+│     ├── separateTooltip: boolean (legacy alias)
+│     ├── maxItems: number
+│     ├── maxSpells: number
+│     ├── minQuality: number
+│     ├── showMoney: boolean
+│     ├── showHint: boolean
+│     ├── showSample: boolean
+│     ├── showMinimap: boolean
+│     ├── trackCombat: boolean
+│     └── trackImmunities: boolean
 ├── npcToZones: map<npcID, map<mapID, true>> (Inverted index for O(1) cross-zone lookups)
 └── zones: map<mapID, ZoneObject>
       └── [mapID]:

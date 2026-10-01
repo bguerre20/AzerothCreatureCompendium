@@ -22,14 +22,18 @@ addon.ICON = "Interface\\Icons\\INV_Misc_Book_09"
 
 -- Default Configuration
 addon.DEFAULT_SETTINGS = {
-    -- Tooltip Triggers
-    modifierKeyLoot = "SHIFT",     -- "SHIFT", "CTRL", "ALT", "NONE"
-    modifierKeyCombat = "CTRL",    -- "CTRL", "SHIFT", "ALT", "NONE"
-    modifierKeyProfession = "ALT", -- "ALT", "SHIFT", "CTRL", "NONE"
-    alwaysShowLoot = false,        -- If true, always display loot sidecar without hotkey
-    alwaysShowCombat = false,      -- If true, always display combat sidecar without hotkey
-    alwaysShowProfession = false,  -- If true, always display profession sidecar without hotkey
-    separateTooltip = true,        -- Display in dedicated companion sidecar tooltips
+    -- Tooltip Triggers & Modes ("SHIFT", "CTRL", "ALT", "ALWAYS", "NEVER")
+    modifierKeyLoot = "SHIFT",     -- Loot drops activation mode
+    modifierKeyCombat = "CTRL",    -- Combat profile activation mode
+    modifierKeyProfession = "ALT", -- Profession loot activation mode
+    alwaysShowLoot = false,        -- Kept for backwards compatibility
+    alwaysShowCombat = false,      -- Kept for backwards compatibility
+    alwaysShowProfession = false,  -- Kept for backwards compatibility
+
+    -- Tooltip Layout & Docking
+    separateTooltip = true,        -- Kept for backwards compatibility (true = SIDECAR, false = EMBEDDED)
+    tooltipLayout = "SIDECAR",     -- "SIDECAR" or "EMBEDDED"
+    sidecarAnchor = "HORIZONTAL",  -- "HORIZONTAL" (Beside: Left/Right dynamic) or "VERTICAL" (Above/Below)
 
     -- Display Limits & Filters
     maxItems = 8,                  -- Top drops to show in tooltip (5, 10, 999 = all)
@@ -148,27 +152,54 @@ local function SlashCommandHandler(msg)
         addon:PrintStatus()
     elseif cmd == "lootkey" or cmd == "lootmod" then
         local choice = string.upper(param or "")
-        if choice == "SHIFT" or choice == "CTRL" or choice == "ALT" or choice == "NONE" then
+        if choice == "NONE" then choice = "ALWAYS" end
+        if choice == "SHIFT" or choice == "CTRL" or choice == "ALT" or choice == "ALWAYS" or choice == "NEVER" then
             addon.db.settings.modifierKeyLoot = choice
-            addon:Print("Loot tooltip modifier set to: |cffffd100%s|r", choice)
+            addon:Print("Loot tooltip activation mode set to: |cffffd100%s|r", choice)
         else
-            addon:Print("Invalid modifier. Choose: |cffffd100SHIFT|r, |cffffd100CTRL|r, |cffffd100ALT|r, or |cffffd100NONE|r")
+            addon:Print("Invalid mode. Choose: |cffffd100SHIFT|r, |cffffd100CTRL|r, |cffffd100ALT|r, |cffffd100ALWAYS|r, or |cffffd100NEVER|r")
         end
     elseif cmd == "combatkey" or cmd == "combatmod" then
         local choice = string.upper(param or "")
-        if choice == "SHIFT" or choice == "CTRL" or choice == "ALT" or choice == "NONE" then
+        if choice == "NONE" then choice = "ALWAYS" end
+        if choice == "SHIFT" or choice == "CTRL" or choice == "ALT" or choice == "ALWAYS" or choice == "NEVER" then
             addon.db.settings.modifierKeyCombat = choice
-            addon:Print("Combat tooltip modifier set to: |cffffd100%s|r", choice)
+            addon:Print("Combat tooltip activation mode set to: |cffffd100%s|r", choice)
         else
-            addon:Print("Invalid modifier. Choose: |cffffd100SHIFT|r, |cffffd100CTRL|r, |cffffd100ALT|r, or |cffffd100NONE|r")
+            addon:Print("Invalid mode. Choose: |cffffd100SHIFT|r, |cffffd100CTRL|r, |cffffd100ALT|r, |cffffd100ALWAYS|r, or |cffffd100NEVER|r")
         end
     elseif cmd == "profkey" or cmd == "profmod" or cmd == "professionkey" then
         local choice = string.upper(param or "")
-        if choice == "SHIFT" or choice == "CTRL" or choice == "ALT" or choice == "NONE" then
+        if choice == "NONE" then choice = "ALWAYS" end
+        if choice == "SHIFT" or choice == "CTRL" or choice == "ALT" or choice == "ALWAYS" or choice == "NEVER" then
             addon.db.settings.modifierKeyProfession = choice
-            addon:Print("Profession tooltip modifier set to: |cffffd100%s|r", choice)
+            addon:Print("Profession tooltip activation mode set to: |cffffd100%s|r", choice)
         else
-            addon:Print("Invalid modifier. Choose: |cffffd100SHIFT|r, |cffffd100CTRL|r, |cffffd100ALT|r, or |cffffd100NONE|r")
+            addon:Print("Invalid mode. Choose: |cffffd100SHIFT|r, |cffffd100CTRL|r, |cffffd100ALT|r, |cffffd100ALWAYS|r, or |cffffd100NEVER|r")
+        end
+    elseif cmd == "layout" or cmd == "tooltiplayout" then
+        local choice = string.upper(param or "")
+        if choice == "SIDECAR" or choice == "SIDECARS" then
+            addon.db.settings.tooltipLayout = "SIDECAR"
+            addon.db.settings.separateTooltip = true
+            addon:Print("Tooltip layout set to: |cffffd100Dedicated Sidecars|r")
+        elseif choice == "EMBEDDED" or choice == "EMBED" or choice == "MERGED" then
+            addon.db.settings.tooltipLayout = "EMBEDDED"
+            addon.db.settings.separateTooltip = false
+            addon:Print("Tooltip layout set to: |cffffd100Embedded in Main Tooltip|r")
+        else
+            addon:Print("Usage: |cffffd100/acc layout <sidecar|embedded>|r")
+        end
+    elseif cmd == "dock" or cmd == "anchor" or cmd == "docking" then
+        local choice = string.upper(param or "")
+        if choice == "BESIDE" or choice == "HORIZONTAL" or choice == "SIDE" then
+            addon.db.settings.sidecarAnchor = "HORIZONTAL"
+            addon:Print("Sidecar docking position set to: |cffffd100Beside Main Tooltip (Horizontal)|r")
+        elseif choice == "ABOVE" or choice == "VERTICAL" or choice == "STACK" then
+            addon.db.settings.sidecarAnchor = "VERTICAL"
+            addon:Print("Sidecar docking position set to: |cffffd100Above / Below Main Tooltip (Vertical)|r")
+        else
+            addon:Print("Usage: |cffffd100/acc dock <beside|above>|r")
         end
     elseif cmd == "max" or cmd == "top" or cmd == "limit" then
         local num = tonumber(param)
@@ -206,8 +237,11 @@ local function SlashCommandHandler(msg)
         print("  |cffffd100/acc minimap|r - Toggle the minimap button icon")
         print("  |cffffd100/acc options|r - Open Settings panel")
         print("  |cffffd100/acc status|r - View database discovery stats")
-        print("  |cffffd100/acc lootkey <SHIFT|CTRL|ALT|NONE>|r - Set Loot tooltip hotkey (current: " .. (addon.db and addon.db.settings.modifierKeyLoot or "SHIFT") .. ")")
-        print("  |cffffd100/acc combatkey <SHIFT|CTRL|ALT|NONE>|r - Set Combat tooltip hotkey (current: " .. (addon.db and addon.db.settings.modifierKeyCombat or "CTRL") .. ")")
+        print("  |cffffd100/acc lootkey <SHIFT|CTRL|ALT|ALWAYS|NEVER>|r - Set Loot tooltip activation")
+        print("  |cffffd100/acc combatkey <SHIFT|CTRL|ALT|ALWAYS|NEVER>|r - Set Combat tooltip activation")
+        print("  |cffffd100/acc profkey <SHIFT|CTRL|ALT|ALWAYS|NEVER>|r - Set Profession tooltip activation")
+        print("  |cffffd100/acc layout <sidecar|embedded>|r - Toggle dedicated sidecars vs embedded inside GameTooltip")
+        print("  |cffffd100/acc dock <beside|above>|r - Set sidecar docking orientation")
         print("  |cffffd100/acc max <1-25>|r - Max drops shown in tooltip")
         print("  |cffffd100/acc lookup <name>|r - Search recorded creature by name")
         print("  |cffffd100/acc reset confirm|r - Clear all recorded compendium history")
