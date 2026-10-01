@@ -1,6 +1,7 @@
 # Azeroth Creature Compendium
 
-## v0.9.3-beta (2026-10-01)
+## v0.9.4-beta (2026-10-01)
+- **Settings UI Polish:** Reduced button text font size and optimized button padding in the Options panel so labels like `[ALWAYS]` fit cleanly without clipping.
 - **Mouse Cursor Tooltip Anchoring:** Added an option to anchor creature tooltips directly at your mouse cursor or keep them attached to Blizzard's main tooltip.
 - **Embedded Tooltip Mode:** Added an option to display creature drop tables, combat profiles, and profession loot directly inside Blizzard's default creature tooltip instead of separate sidecars.
 - **Always & Never Activation Modes:** Each tooltip category (Loot Drops, Combat Profile, Profession Loot) can now be set to require a hotkey (Shift, Ctrl, Alt), Always show automatically on mouseover, or Never show (disabled).
