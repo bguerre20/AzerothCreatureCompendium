@@ -387,10 +387,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if (name == ADDON_NAME or name == "AzerothCreatureCompendium" or name == "BgLootLogger") and not isLoaded then
             isLoaded = true
             addon:InitDatabase()
-            addon:Print("Loaded. Hold [|cffffd100%s|r] Loot | [|cffffd100%s|r] Combat | [|cffffd100%s|r] Prof. Type |cffffd100/acc|r for Compendium.",
-                addon.db.settings.modifierKeyLoot or "SHIFT",
-                addon.db.settings.modifierKeyCombat or "CTRL",
-                addon.db.settings.modifierKeyProfession or "ALT")
+            addon:Print("Loaded. Type |cffffd100/acc|r for Compendium window or |cffffd100/acc options|r for settings.")
         end
     elseif event == "UNIT_SPELLCAST_START" then
         local unit, castGUID, spellID = ...

@@ -40,30 +40,46 @@ local function InitializeOptions()
     divider:SetThickness(1)
 
     ---------------------------------------------------------------------------
-    -- Section 1: Activation Hotkeys (Taint-Free Native Button Groups)
+    -- Section 1: Activation Hotkeys & Modes (Taint-Free Native Button Groups)
     ---------------------------------------------------------------------------
     local hotkeyHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     hotkeyHeader:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -20)
-    hotkeyHeader:SetText("Tooltip Activation Hotkeys")
+    hotkeyHeader:SetText("Tooltip Activation Modes")
 
-    local hotkeyChoices = { "SHIFT", "CTRL", "ALT", "NONE" }
-    local ROW_LABEL_WIDTH = 150
+    local hotkeyChoices = { "SHIFT", "CTRL", "ALT", "ALWAYS", "NEVER" }
+    local ROW_LABEL_WIDTH = 130
+    local BTN_WIDTH = 62
+    local BTN_HEIGHT = 22
+    local BTN_GAP = 5
+
+    local function FormatKeyText(keyVal, isSelected)
+        if not isSelected then
+            return "|cffffffff" .. keyVal .. "|r"
+        end
+        if keyVal == "ALWAYS" then
+            return "|cff00ff96[" .. keyVal .. "]|r"
+        elseif keyVal == "NEVER" then
+            return "|cffff4444[" .. keyVal .. "]|r"
+        else
+            return "|cffffd100[" .. keyVal .. "]|r"
+        end
+    end
 
     -- Loot Tooltip Hotkey Group
     local lootKeyLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     lootKeyLabel:SetPoint("TOPLEFT", hotkeyHeader, "BOTTOMLEFT", 4, -14)
     lootKeyLabel:SetSize(ROW_LABEL_WIDTH, 20)
     lootKeyLabel:SetJustifyH("LEFT")
-    lootKeyLabel:SetText("Loot Tooltip Key:")
+    lootKeyLabel:SetText("Loot Drops:")
 
     local lootButtons = {}
     for idx, keyVal in ipairs(hotkeyChoices) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-        btn:SetSize(58, 22)
+        btn:SetSize(BTN_WIDTH, BTN_HEIGHT)
         if idx == 1 then
             btn:SetPoint("LEFT", lootKeyLabel, "RIGHT", 10, 0)
         else
-            btn:SetPoint("LEFT", lootButtons[idx - 1], "RIGHT", 6, 0)
+            btn:SetPoint("LEFT", lootButtons[idx - 1], "RIGHT", BTN_GAP, 0)
         end
         btn:SetText(keyVal)
         btn:SetScript("OnClick", function()
@@ -78,16 +94,16 @@ local function InitializeOptions()
     combatKeyLabel:SetPoint("TOPLEFT", lootKeyLabel, "BOTTOMLEFT", 0, -8)
     combatKeyLabel:SetSize(ROW_LABEL_WIDTH, 20)
     combatKeyLabel:SetJustifyH("LEFT")
-    combatKeyLabel:SetText("Combat Tooltip Key:")
+    combatKeyLabel:SetText("Combat Profile:")
 
     local combatButtons = {}
     for idx, keyVal in ipairs(hotkeyChoices) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-        btn:SetSize(58, 22)
+        btn:SetSize(BTN_WIDTH, BTN_HEIGHT)
         if idx == 1 then
             btn:SetPoint("LEFT", combatKeyLabel, "RIGHT", 10, 0)
         else
-            btn:SetPoint("LEFT", combatButtons[idx - 1], "RIGHT", 6, 0)
+            btn:SetPoint("LEFT", combatButtons[idx - 1], "RIGHT", BTN_GAP, 0)
         end
         btn:SetText(keyVal)
         btn:SetScript("OnClick", function()
@@ -102,16 +118,16 @@ local function InitializeOptions()
     profKeyLabel:SetPoint("TOPLEFT", combatKeyLabel, "BOTTOMLEFT", 0, -8)
     profKeyLabel:SetSize(ROW_LABEL_WIDTH, 20)
     profKeyLabel:SetJustifyH("LEFT")
-    profKeyLabel:SetText("Profession Tooltip Key:")
+    profKeyLabel:SetText("Profession Loot:")
 
     local profButtons = {}
     for idx, keyVal in ipairs(hotkeyChoices) do
         local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-        btn:SetSize(58, 22)
+        btn:SetSize(BTN_WIDTH, BTN_HEIGHT)
         if idx == 1 then
             btn:SetPoint("LEFT", profKeyLabel, "RIGHT", 10, 0)
         else
-            btn:SetPoint("LEFT", profButtons[idx - 1], "RIGHT", 6, 0)
+            btn:SetPoint("LEFT", profButtons[idx - 1], "RIGHT", BTN_GAP, 0)
         end
         btn:SetText(keyVal)
         btn:SetScript("OnClick", function()
@@ -128,31 +144,13 @@ local function InitializeOptions()
 
         for idx, keyVal in ipairs(hotkeyChoices) do
             local lBtn = lootButtons[idx]
-            if lBtn then
-                if keyVal == currentLoot then
-                    lBtn:SetText("|cffffd100[" .. keyVal .. "]|r")
-                else
-                    lBtn:SetText("|cffffffff" .. keyVal .. "|r")
-                end
-            end
+            if lBtn then lBtn:SetText(FormatKeyText(keyVal, keyVal == currentLoot)) end
 
             local cBtn = combatButtons[idx]
-            if cBtn then
-                if keyVal == currentCombat then
-                    cBtn:SetText("|cffffd100[" .. keyVal .. "]|r")
-                else
-                    cBtn:SetText("|cffffffff" .. keyVal .. "|r")
-                end
-            end
+            if cBtn then cBtn:SetText(FormatKeyText(keyVal, keyVal == currentCombat)) end
 
             local pBtn = profButtons[idx]
-            if pBtn then
-                if keyVal == currentProf then
-                    pBtn:SetText("|cffffd100[" .. keyVal .. "]|r")
-                else
-                    pBtn:SetText("|cffffffff" .. keyVal .. "|r")
-                end
-            end
+            if pBtn then pBtn:SetText(FormatKeyText(keyVal, keyVal == currentProf)) end
         end
     end
 
@@ -164,30 +162,142 @@ local function InitializeOptions()
     divider2:SetThickness(1)
 
     ---------------------------------------------------------------------------
-    -- Section 2: Tooltip Appearance & Details
+    -- Section 2: Tooltip Layout & Docking
     ---------------------------------------------------------------------------
     local appearanceHeader = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     appearanceHeader:SetPoint("TOPLEFT", profKeyLabel, "BOTTOMLEFT", -4, -26)
-    appearanceHeader:SetText("Tooltip Appearance & Discovery")
+    appearanceHeader:SetText("Tooltip Layout & Appearance")
 
-    -- Checkbox: Separate companion tooltips
-    local separateCheck = CreateFrame("CheckButton", "AzerothCompendiumSeparateCheck", panel, "InterfaceOptionsCheckButtonTemplate")
-    separateCheck:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 0, -8)
-    local separateLabel = separateCheck.Text or _G[separateCheck:GetName() .. "Text"]
-    if separateLabel then
-        separateLabel:SetText("Display in dedicated companion sidecar tooltips")
-        separateLabel:SetFontObject("GameFontHighlight")
-    end
-    separateCheck:SetScript("OnClick", function(self)
-        addon.db.settings.separateTooltip = self:GetChecked()
+    -- Row 1: Layout Mode (Sidecar vs Embedded)
+    local layoutLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    layoutLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 4, -14)
+    layoutLabel:SetSize(ROW_LABEL_WIDTH, 20)
+    layoutLabel:SetJustifyH("LEFT")
+    layoutLabel:SetText("Layout Mode:")
+
+    local sidecarBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    sidecarBtn:SetSize(155, 22)
+    sidecarBtn:SetPoint("LEFT", layoutLabel, "RIGHT", 10, 0)
+    sidecarBtn:SetText("Dedicated Sidecars")
+    sidecarBtn:SetScript("OnClick", function()
+        addon.db.settings.tooltipLayout = "SIDECAR"
+        addon.db.settings.separateTooltip = true
+        addon:RefreshOptionsLayout()
     end)
+
+    local embeddedBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    embeddedBtn:SetSize(185, 22)
+    embeddedBtn:SetPoint("LEFT", sidecarBtn, "RIGHT", 6, 0)
+    embeddedBtn:SetText("Embedded in Main Tooltip")
+    embeddedBtn:SetScript("OnClick", function()
+        addon.db.settings.tooltipLayout = "EMBEDDED"
+        addon.db.settings.separateTooltip = false
+        addon:RefreshOptionsLayout()
+    end)
+
+    -- Row 2: Tooltip Anchor Point (Blizzard Tooltip vs Mouse Cursor)
+    local anchorLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    anchorLabel:SetPoint("TOPLEFT", layoutLabel, "BOTTOMLEFT", 0, -8)
+    anchorLabel:SetSize(ROW_LABEL_WIDTH, 20)
+    anchorLabel:SetJustifyH("LEFT")
+    anchorLabel:SetText("Tooltip Anchor:")
+
+    local anchorBlizzBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    anchorBlizzBtn:SetSize(155, 22)
+    anchorBlizzBtn:SetPoint("LEFT", anchorLabel, "RIGHT", 10, 0)
+    anchorBlizzBtn:SetText("Attached to Main")
+    anchorBlizzBtn:SetScript("OnClick", function()
+        addon.db.settings.tooltipAnchor = "BLIZZARD"
+        addon:RefreshOptionsLayout()
+    end)
+
+    local anchorCursorBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    anchorCursorBtn:SetSize(185, 22)
+    anchorCursorBtn:SetPoint("LEFT", anchorBlizzBtn, "RIGHT", 6, 0)
+    anchorCursorBtn:SetText("At Mouse Cursor")
+    anchorCursorBtn:SetScript("OnClick", function()
+        addon.db.settings.tooltipAnchor = "CURSOR"
+        addon:RefreshOptionsLayout()
+    end)
+
+    -- Row 3: Sidecar Docking Orientation
+    local dockLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    dockLabel:SetPoint("TOPLEFT", anchorLabel, "BOTTOMLEFT", 0, -8)
+    dockLabel:SetSize(ROW_LABEL_WIDTH, 20)
+    dockLabel:SetJustifyH("LEFT")
+    dockLabel:SetText("Sidecar Docking:")
+
+    local dockBesideBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    dockBesideBtn:SetSize(155, 22)
+    dockBesideBtn:SetPoint("LEFT", dockLabel, "RIGHT", 10, 0)
+    dockBesideBtn:SetText("Beside (Left/Right)")
+    dockBesideBtn:SetScript("OnClick", function()
+        addon.db.settings.sidecarAnchor = "HORIZONTAL"
+        addon:RefreshOptionsLayout()
+    end)
+
+    local dockAboveBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    dockAboveBtn:SetSize(185, 22)
+    dockAboveBtn:SetPoint("LEFT", dockBesideBtn, "RIGHT", 6, 0)
+    dockAboveBtn:SetText("Above / Below (Vertical)")
+    dockAboveBtn:SetScript("OnClick", function()
+        addon.db.settings.sidecarAnchor = "VERTICAL"
+        addon:RefreshOptionsLayout()
+    end)
+
+    function addon:RefreshOptionsLayout()
+        local s = self.db and self.db.settings
+        local layout = (s and s.tooltipLayout) or "SIDECAR"
+        local anchor = (s and s.sidecarAnchor) or "HORIZONTAL"
+        local tipAnchor = (s and s.tooltipAnchor) or "BLIZZARD"
+
+        -- 1. Layout Mode
+        if layout == "SIDECAR" then
+            sidecarBtn:SetText("|cff00ff96[Dedicated Sidecars]|r")
+            embeddedBtn:SetText("|cffffffffEmbedded in Main Tooltip|r")
+
+            dockLabel:SetAlpha(1.0)
+            dockBesideBtn:Enable()
+            dockBesideBtn:SetAlpha(1.0)
+            dockAboveBtn:Enable()
+            dockAboveBtn:SetAlpha(1.0)
+
+            if anchor == "HORIZONTAL" then
+                dockBesideBtn:SetText("|cffffd100[Beside (Left/Right)]|r")
+                dockAboveBtn:SetText("|cffffffffAbove / Below (Vertical)|r")
+            else
+                dockBesideBtn:SetText("|cffffffffBeside (Left/Right)|r")
+                dockAboveBtn:SetText("|cffffd100[Above / Below (Vertical)]|r")
+            end
+        else
+            sidecarBtn:SetText("|cffffffffDedicated Sidecars|r")
+            embeddedBtn:SetText("|cff00ff96[Embedded in Main Tooltip]|r")
+
+            dockLabel:SetAlpha(0.4)
+            dockBesideBtn:Disable()
+            dockBesideBtn:SetAlpha(0.4)
+            dockAboveBtn:Disable()
+            dockAboveBtn:SetAlpha(0.4)
+            dockBesideBtn:SetText("|cff888888Beside (Left/Right)|r")
+            dockAboveBtn:SetText("|cff888888Above / Below (Vertical)|r")
+        end
+
+        -- 2. Tooltip Anchor Point
+        if tipAnchor == "CURSOR" then
+            anchorBlizzBtn:SetText("|cffffffffAttached to Main|r")
+            anchorCursorBtn:SetText("|cffffd100[At Mouse Cursor]|r")
+        else
+            anchorBlizzBtn:SetText("|cffffd100[Attached to Main]|r")
+            anchorCursorBtn:SetText("|cffffffffAt Mouse Cursor|r")
+        end
+    end
 
     -- Checkbox: Show hotkey hint
     local hintCheck = CreateFrame("CheckButton", "AzerothCompendiumHintCheck", panel, "InterfaceOptionsCheckButtonTemplate")
-    hintCheck:SetPoint("TOPLEFT", separateCheck, "BOTTOMLEFT", 0, -4)
+    hintCheck:SetPoint("TOPLEFT", dockLabel, "BOTTOMLEFT", -4, -10)
     local hintLabel = hintCheck.Text or _G[hintCheck:GetName() .. "Text"]
     if hintLabel then
-        hintLabel:SetText("Show '[Hold Shift Loot / Ctrl Combat]' hotkey hint line on mobs")
+        hintLabel:SetText("Show hotkey hint line on creature tooltips")
         hintLabel:SetFontObject("GameFontHighlight")
     end
     hintCheck:SetScript("OnClick", function(self)
@@ -253,8 +363,8 @@ local function InitializeOptions()
         local s = addon.db.settings
 
         addon:RefreshOptionsHotkeys()
+        addon:RefreshOptionsLayout()
 
-        separateCheck:SetChecked(s.separateTooltip ~= false)
         hintCheck:SetChecked(s.showHint ~= false)
         moneyCheck:SetChecked(s.showMoney ~= false)
         combatLogCheck:SetChecked(s.trackCombat ~= false)

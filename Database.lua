@@ -32,6 +32,20 @@ function addon:InitDatabase()
         end
     end
 
+    -- Legacy settings migration
+    if db.settings.modifierKeyLoot == "NONE" then db.settings.modifierKeyLoot = "ALWAYS" end
+    if db.settings.modifierKeyCombat == "NONE" then db.settings.modifierKeyCombat = "ALWAYS" end
+    if db.settings.modifierKeyProfession == "NONE" then db.settings.modifierKeyProfession = "ALWAYS" end
+    if db.settings.tooltipLayout == nil then
+        db.settings.tooltipLayout = (db.settings.separateTooltip == false) and "EMBEDDED" or "SIDECAR"
+    end
+    if db.settings.sidecarAnchor == nil then
+        db.settings.sidecarAnchor = "HORIZONTAL"
+    end
+    if db.settings.tooltipAnchor == nil then
+        db.settings.tooltipAnchor = "BLIZZARD"
+    end
+
     db.zones = db.zones or {}
     db.npcToZones = db.npcToZones or {}
 
