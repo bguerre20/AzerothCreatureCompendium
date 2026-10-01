@@ -110,7 +110,7 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
 | **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
-| **5** | [Tooltip.lua](../Tooltip.lua) | Tri-sidecar companion tooltips (Loot, Combat, Professions) anchored next to Blizzard's native `GameTooltip` with live modifier detection and dynamic screen clamping. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
+| **5** | [Tooltip.lua](../Tooltip.lua) | Tri-sidecar companion tooltips (Loot, Combat, Professions) anchored next to Blizzard's native `GameTooltip` with live modifier detection, dynamic screen clamping, and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree, 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
 | **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterAddOnCategory`), UI sliders, dropdowns, and keybinding selectors with live updates. | `addon:CreateOptionsPanel()` |
 
@@ -243,24 +243,38 @@ sequenceDiagram
     activate Tooltip
     Tooltip->>Tooltip: Extract unit GUID & NPC ID
     Tooltip->>DB: GetMobData(npcID, currentMapID)
-    DB-->>Tooltip: Return mob record & zone data
 
-    Tooltip->>Tooltip: Evaluate Modifier Keys (IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown)
+    alt Mob Record Found in Database
+        DB-->>Tooltip: Return mob record & zone data
+        opt showHint enabled and hotkeys not all active
+            Tooltip->>BlizzardTT: Render "[Compendium] Hold [SHIFT] Loot [CTRL] Combat [ALT] Prof"
+        end
+        Tooltip->>Tooltip: Evaluate Modifier Keys (IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown)
 
-    par Show Loot Tooltip
-        opt Shift held or alwaysShowLoot enabled
-            Tooltip->>Tooltip: Anchor Loot Sidecar to GameTooltip RIGHT
-            Tooltip->>Tooltip: Render drop rates %, item qualities, and coin stats
+        par Show Loot Tooltip
+            opt Shift held or alwaysShowLoot enabled
+                Tooltip->>Tooltip: Anchor Loot Sidecar to GameTooltip (RIGHT/LEFT dynamic clamp)
+                Tooltip->>Tooltip: Render drop rates %, item qualities, and coin stats
+            end
+        and Show Combat Tooltip
+            opt Ctrl held or alwaysShowCombat enabled
+                Tooltip->>Tooltip: Anchor Combat Sidecar (stacks beside Loot Sidecar)
+                Tooltip->>Tooltip: Render immunity badges, swing damage, and spells
+            end
+        and Show Profession Tooltip
+            opt Alt held or alwaysShowProfession enabled
+                Tooltip->>Tooltip: Anchor Profession Sidecar (stacks beside active Sidecars)
+                Tooltip->>Tooltip: Render gathered materials %, harvests, and skill tags
+            end
         end
-    and Show Combat Tooltip
-        opt Ctrl held or alwaysShowCombat enabled
-            Tooltip->>Tooltip: Anchor Combat Sidecar (stacks beside Loot Sidecar)
-            Tooltip->>Tooltip: Render immunity badges, swing damage, and spells
+    else Mob Not Yet Recorded (First Encounter Discovery)
+        DB-->>Tooltip: nil (creature not yet observed or cataloged)
+        Tooltip->>BlizzardTT: Render "[Compendium] New creature — No encounters recorded yet"
+        opt showHint enabled
+            Tooltip->>BlizzardTT: Render hotkey hints
         end
-    and Show Profession Tooltip
-        opt Alt held or alwaysShowProfession enabled
-            Tooltip->>Tooltip: Anchor Profession Sidecar (stacks beside active Sidecars)
-            Tooltip->>Tooltip: Render gathered materials %, harvests, and skill tags
+        opt Modifier Key Held or Real-Time Press (MODIFIER_STATE_CHANGED)
+            Tooltip->>Tooltip: Anchor placeholder sidecars with helpful discovery prompts ("No drops / combat / gathering recorded yet")
         end
     end
     deactivate Tooltip

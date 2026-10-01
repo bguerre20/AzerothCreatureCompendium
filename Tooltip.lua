@@ -270,6 +270,10 @@ function addon:PopulateCombatContent(tip, mob)
         end
     end
 
+    if #imms == 0 and (not atk or (atk.swings or 0) == 0) and #spells == 0 then
+        tip:AddLine("  |cff888888No combat data recorded yet.|r")
+    end
+
     -- 5. Kills and encounters footer
     if (mob.kills or 0) > 0 or (mob.encounters or 0) > 0 then
         tip:AddLine(" ")
@@ -285,8 +289,8 @@ end
 -- Dual Companion Sidecar Positioning
 -------------------------------------------------------------------------------
 
-function addon:UpdateCompanionTooltips(mob)
-    if not mob or not GameTooltip:IsShown() then
+function addon:UpdateCompanionTooltips(mob, unrecordedName)
+    if (not mob and not unrecordedName) or not GameTooltip:IsShown() then
         lootTooltip:Hide()
         combatTooltip:Hide()
         professionTooltip:Hide()
@@ -310,10 +314,18 @@ function addon:UpdateCompanionTooltips(mob)
         lootTooltip:ClearAllPoints()
         lootTooltip:ClearLines()
 
-        local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
-        lootTooltip:AddLine(string.format("|cff00ff96%s Drops|r |cff888888(%d loots)|r", mob.name or "Mob", lootsCount))
-        lootTooltip:AddLine(" ")
-        self:PopulateLootContent(lootTooltip, mob)
+        if mob then
+            local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
+            lootTooltip:AddLine(string.format("|cff00ff96%s Drops|r |cff888888(%d loots)|r", mob.name or "Mob", lootsCount))
+            lootTooltip:AddLine(" ")
+            self:PopulateLootContent(lootTooltip, mob)
+        else
+            lootTooltip:AddLine(string.format("|cff00ff96%s Drops|r", unrecordedName or "Creature"))
+            lootTooltip:AddLine(" ")
+            lootTooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
+            lootTooltip:AddLine("  |cff888888Defeat and loot to record item drops.|r")
+        end
+
         lootTooltip:Show()
         table.insert(activeTooltips, lootTooltip)
     else
@@ -326,8 +338,16 @@ function addon:UpdateCompanionTooltips(mob)
         combatTooltip:ClearAllPoints()
         combatTooltip:ClearLines()
 
-        combatTooltip:AddLine(string.format("|cffe5c158%s - Combat Profile|r", mob.name or "Mob"))
-        self:PopulateCombatContent(combatTooltip, mob)
+        if mob then
+            combatTooltip:AddLine(string.format("|cffe5c158%s - Combat Profile|r", mob.name or "Mob"))
+            self:PopulateCombatContent(combatTooltip, mob)
+        else
+            combatTooltip:AddLine(string.format("|cffe5c158%s - Combat Profile|r", unrecordedName or "Creature"))
+            combatTooltip:AddLine(" ")
+            combatTooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
+            combatTooltip:AddLine("  |cff888888Engage in combat to discover attacks, spells, and immunities.|r")
+        end
+
         combatTooltip:Show()
         table.insert(activeTooltips, combatTooltip)
     else
@@ -340,10 +360,18 @@ function addon:UpdateCompanionTooltips(mob)
         professionTooltip:ClearAllPoints()
         professionTooltip:ClearLines()
 
-        local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
-        professionTooltip:AddLine(string.format("|cffc7a16b%s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or "Mob", harvestsCount))
-        professionTooltip:AddLine(" ")
-        self:PopulateProfessionContent(professionTooltip, mob)
+        if mob then
+            local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
+            professionTooltip:AddLine(string.format("|cffc7a16b%s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or "Mob", harvestsCount))
+            professionTooltip:AddLine(" ")
+            self:PopulateProfessionContent(professionTooltip, mob)
+        else
+            professionTooltip:AddLine(string.format("|cffc7a16b%s - Profession Loot|r", unrecordedName or "Creature"))
+            professionTooltip:AddLine(" ")
+            professionTooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
+            professionTooltip:AddLine("  |cff888888Gather or skin this creature to discover profession loot.|r")
+        end
+
         professionTooltip:Show()
         table.insert(activeTooltips, professionTooltip)
     else
@@ -398,16 +426,35 @@ function addon:OnTooltipSetUnit(tooltip, data)
     local mapID = C_Map.GetBestMapForUnit("player") or 0
     local mob = self:GetMobData(npcID, mapID)
 
-    if not mob then
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
-        return
+    -- Resolve creature name
+    local unitName = (unit and UnitName(unit))
+    if not unitName and tooltip.GetUnit then
+        local tipName = select(1, tooltip:GetUnit())
+        if tipName and tipName ~= "" then
+            unitName = tipName
+        end
     end
+    unitName = unitName or "Creature"
 
     local showLoot = self:IsLootModActive()
     local showCombat = self:IsCombatModActive()
     local showProf = self:IsProfessionModActive()
+
+    if not mob then
+        -- Issue #24: First mob encounter - inform player and render discovery status
+        tooltip:AddLine("|cff00ff96[Compendium]|r |cff888888New creature — No encounters recorded yet|r")
+
+        if self.db.settings.showHint and (not showLoot or not showCombat or not showProf) then
+            local lootKey = self.db.settings.modifierKeyLoot or "SHIFT"
+            local combatKey = self.db.settings.modifierKeyCombat or "CTRL"
+            local profKey = self.db.settings.modifierKeyProfession or "ALT"
+            local hintText = string.format("|cff00ff96[Compendium]|r |cff888888Hold [|r|cffffd100%s|r|cff888888] Loot  [|r|cffffd100%s|r|cff888888] Combat  [|r|cffffd100%s|r|cff888888] Prof|r", lootKey, combatKey, profKey)
+            tooltip:AddLine(hintText)
+        end
+
+        self:UpdateCompanionTooltips(nil, unitName)
+        return
+    end
 
     -- Add hint lines to GameTooltip if hints enabled and not all hotkeys held
     if self.db.settings.showHint and (not showLoot or not showCombat or not showProf) then
@@ -451,15 +498,21 @@ modWatcher:SetScript("OnEvent", function(self, event)
         if unit and UnitExists(unit) then
             local guid = UnitGUID(unit)
             local npcID = addon:GetNPCIDFromGUID(guid)
-            local mapID = C_Map.GetBestMapForUnit("player") or 0
-            local mob = npcID and addon:GetMobData(npcID, mapID)
-            if mob then
-                addon:UpdateCompanionTooltips(mob)
-            else
+            if not npcID then
                 lootTooltip:Hide()
                 combatTooltip:Hide()
                 professionTooltip:Hide()
+                return
             end
+
+            local mapID = C_Map.GetBestMapForUnit("player") or 0
+            local mob = addon:GetMobData(npcID, mapID)
+            local unitName = UnitName(unit) or "Creature"
+            addon:UpdateCompanionTooltips(mob, unitName)
+        else
+            lootTooltip:Hide()
+            combatTooltip:Hide()
+            professionTooltip:Hide()
         end
     else
         lootTooltip:Hide()
