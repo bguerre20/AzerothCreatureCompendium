@@ -107,7 +107,7 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | Execution Order | File | Responsibility | Primary APIs / Exports |
 | :--- | :--- | :--- | :--- |
 | **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, and slash command registries. | `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
-| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and test data seeding. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
+| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
 | **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
 | **5** | [Tooltip.lua](../Tooltip.lua) | Tri-sidecar companion tooltips (Loot, Combat, Professions) anchored next to Blizzard's native `GameTooltip` with live modifier detection and dynamic screen clamping. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
@@ -128,7 +128,6 @@ sequenceDiagram
     participant Client as WoW Client
     participant Core as Core.lua
     participant DB as Database.lua
-    participant Seed as Test Seeder
 
     Client->>Core: Fire ADDON_LOADED (AzerothCreatureCompendium)
     Core->>DB: addon:InitDatabase()
@@ -140,10 +139,7 @@ sequenceDiagram
         DB->>DB: Migrate legacy keybinding preferences
         DB->>DB: Keep BgLootLoggerDB pointer synchronized
     end
-    DB->>DB: Prune empty non-rare mob stubs
-    DB->>Seed: addon:SeedDunMoroghTestMobs()
-    Seed->>DB: Seed Timber [Rare] (Silver, single coord)
-    Seed->>DB: Seed Vagash [Elite] (Gold, no coord)
+    DB->>DB: Prune empty non-rare mob stubs & legacy demo data
     deactivate DB
     Core->>Client: Print welcome message with configured modifier hotkeys
 ```
