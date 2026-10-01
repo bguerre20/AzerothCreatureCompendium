@@ -114,6 +114,14 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree, 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
 | **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
 
+### Packaging & Release Manifests
+
+| File | Purpose | Consumers |
+| :--- | :--- | :--- |
+| [AzerothCreatureCompendium.toc](../AzerothCreatureCompendium.toc) | Blizzard addon manifest defining load order, SavedVariables, interface versions, and metadata. | World of Warcraft Client, BigWigs Packager |
+| [.pkgmeta](../.pkgmeta) | Packaging configuration: specifies zip ignore patterns and binds `manual-changelog` to `CHANGELOG.md`. | BigWigs Packager (`release.sh`) |
+| [CHANGELOG.md](../CHANGELOG.md) | Single source of truth for player-centric release notes. Consumed by BigWigs Packager to publish clean notes on CurseForge. | CurseForge, GitHub Releases, End Users |
+
 ---
 
 ## 🔄 Core Execution Pipelines (Sequence Diagrams)
@@ -378,8 +386,8 @@ AzerothCreatureCompendiumDB
 - **Decision:** On initial load, the migration engine detects legacy tables, upgrades schema objects to the 3-sibling hierarchy (`Combat`, `Loot`, `Professions`), and maintains synchronized backward-compatible aliases.
 
 ### 5. Automated CI/CD Release Pipeline & Semantic Versioning
-- **Context:** Manual zip archiving and uploading to CurseForge/GitHub is error-prone, risks committing local development artifacts, and causes version drift between TOC manifests and in-game UI.
-- **Decision:** Releases are automated via `BigWigsMods/packager@v2` triggered on Git tag push (`v*`). Development tools and docs are excluded via `.pkgmeta`. The TOC manifest and config dynamically interpolate `@project-version@` tags into the authoritative `addon.VERSION` constant, adhering strictly to Semantic Versioning (`MAJOR.MINOR.PATCH`).
+- **Context:** Manual zip archiving and uploading to CurseForge/GitHub is error-prone, risks committing local development artifacts, causes version drift between TOC manifests and in-game UI, and leaks internal git commit logs into public release notes.
+- **Decision:** Releases are automated via `BigWigsMods/packager@v2` triggered on Git tag push (`v*`). Development tools and docs are excluded via [`.pkgmeta`](../.pkgmeta). To guarantee clean, player-centric release notes on CurseForge without git commit dumps or issue closures, `.pkgmeta` configures `manual-changelog` pointing to [`CHANGELOG.md`](../CHANGELOG.md). The TOC manifest and config dynamically interpolate `@project-version@` tags into the authoritative `addon.VERSION` constant, adhering strictly to Semantic Versioning (`MAJOR.MINOR.PATCH`).
 
 ---
 
