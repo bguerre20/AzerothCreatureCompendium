@@ -497,14 +497,14 @@ function addon:OnTooltipSetUnit(tooltip, data)
     local mob = self:GetMobData(npcID, mapID)
 
     -- Resolve creature name
-    local unitName = (unit and UnitName(unit))
+    local unitName = (unit and UnitExists(unit) and self:SafeString(UnitName(unit), nil))
     if not unitName and tooltip.GetUnit then
-        local tipName = select(1, tooltip:GetUnit())
-        if tipName and tipName ~= "" then
-            unitName = tipName
+        local ok, tipName = pcall(function() return select(1, tooltip:GetUnit()) end)
+        if ok and tipName then
+            unitName = self:SafeString(tipName, nil)
         end
     end
-    unitName = unitName or "Creature"
+    unitName = unitName or (mob and mob.name) or "Creature"
 
     local showLoot = self:IsLootModActive()
     local showCombat = self:IsCombatModActive()
@@ -656,7 +656,7 @@ modWatcher:SetScript("OnEvent", function(self, event)
 
         local mapID = C_Map.GetBestMapForUnit("player") or 0
         local mob = addon:GetMobData(npcID, mapID)
-        local unitName = UnitName(unit) or "Creature"
+        local unitName = addon:SafeString(UnitName(unit), (mob and mob.name) or "Creature")
 
         if addon:IsEmbeddedLayout() then
             if not addon.isRefreshingTip then

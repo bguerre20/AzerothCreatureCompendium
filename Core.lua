@@ -49,18 +49,38 @@ addon.GATHER_SPELL_IDS = {
     [20222] = "Engineering",
 }
 
+-- Safe spell name and texture resolver supporting modern C_Spell and classic GetSpellInfo
+-- Returns nil, nil if spell information is restricted by Blizzard's secret value system
+function addon:ResolveSpellInfo(spellID)
+    if not spellID then return nil, nil end
+    local spellName, spellTexture = nil, nil
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
+        if ok and info then
+            spellName = self:SafeString(info.name, nil)
+            spellTexture = info.iconID
+        end
+    end
+    if not spellName and C_Spell and C_Spell.GetSpellName then
+        local ok, name = pcall(C_Spell.GetSpellName, spellID)
+        if ok and name then
+            spellName = self:SafeString(name, nil)
+        end
+    end
+    if not spellName and GetSpellInfo then
+        local ok, name, _, icon = pcall(GetSpellInfo, spellID)
+        if ok then
+            spellName = self:SafeString(name, nil)
+            spellTexture = spellTexture or icon
+        end
+    end
+    return spellName, spellTexture
+end
+
 -- Safe spell name resolver
 function addon:GetSpellName(spellID)
-    if not spellID then return nil end
-    if C_Spell and C_Spell.GetSpellInfo then
-        local info = C_Spell.GetSpellInfo(spellID)
-        if info and info.name then return info.name end
-    end
-    if GetSpellInfo then
-        local name = GetSpellInfo(spellID)
-        if name then return name end
-    end
-    return nil
+    local name, _ = self:ResolveSpellInfo(spellID)
+    return name
 end
 
 -- Identify gathering profession by spell ID or localized name
@@ -144,14 +164,14 @@ function addon:CacheUnit(unit)
     local npcID = self:GetNPCIDFromGUID(guid)
     if not npcID then return end
 
-    local name = UnitName(unit)
+    local name = self:SafeString(UnitName(unit), nil)
     if name and name ~= "" and name ~= "Unknown" then
         self.npcNameCache[npcID] = name
     end
 
     -- Store creature metadata in runtime cache
-    local classification = UnitClassification(unit)
-    local creatureType = UnitCreatureType(unit)
+    local classification = self:SafeString(UnitClassification(unit), "normal")
+    local creatureType = self:SafeString(UnitCreatureType(unit), nil)
     local level = UnitLevel(unit)
 
     addon.unitMetaCache[npcID] = {
@@ -300,13 +320,13 @@ function addon:ProcessLoot()
     -- 2. Resolve mob display name
     local mobName = nil
     if UnitExists("target") and UnitGUID("target") == sourceGUID then
-        mobName = UnitName("target")
+        mobName = self:SafeString(UnitName("target"), nil)
     elseif UnitExists("mouseover") and UnitGUID("mouseover") == sourceGUID then
-        mobName = UnitName("mouseover")
+        mobName = self:SafeString(UnitName("mouseover"), nil)
     end
 
     if not mobName or mobName == "" then
-        mobName = self.npcNameCache[npcID]
+        mobName = self:SafeString(self.npcNameCache[npcID], nil)
     end
 
     if not mobName or mobName == "" then

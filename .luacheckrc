@@ -138,4 +138,8 @@ read_globals = {
     "C_CurrencyInfo",
     "C_Timer",
     "C_AddOns",
+
+    -- Modern & Security Globals
+    "issecretvalue",
+    "InCombatLockdown",
 }

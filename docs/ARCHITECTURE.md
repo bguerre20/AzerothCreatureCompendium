@@ -106,10 +106,10 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 
 | Execution Order | File | Responsibility | Primary APIs / Exports |
 | :--- | :--- | :--- | :--- |
-| **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, and slash command registries. | `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
-| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, rank calculations, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()`, `addon:GetMobResearchRank()` |
-| **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `AzerothCompendiumCombatListenerFrame` |
-| **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, and coin transaction parser. | `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
+| **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, secret value detection/sanitization, and slash command registries. | `addon:IsSecretValue()`, `addon:SafeString()`, `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
+| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, rank calculations, secret value sanitization, on-demand deferred spell resolution, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()`, `addon:GetMobResearchRank()` |
+| **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts, deferred out-of-combat spell resolution, and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `addon:ProcessPendingSpellResolutions()`, `AzerothCompendiumCombatListenerFrame` |
+| **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, coin transaction parser, and safe spell info resolver. | `addon:ResolveSpellInfo()`, `addon:GetSpellName()`, `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
 | **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`) and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree (with hover tooltips for Bestiary Progression ranks), 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, Bestiary Progression Rank display, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
 | **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
@@ -189,10 +189,20 @@ sequenceDiagram
     end
     deactivate Combat
 
-    %% Phase 3: Enemy Spell Tracking
+    %% Phase 3: Enemy Spell Tracking & Secret Value Handling
     Note over Client,Combat: Enemy Mob retaliates by casting a spell
     Client->>Combat: UNIT_SPELLCAST_START (unit, castGUID, spellID)
-    Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, spellName, school, icon)
+    Combat->>Core: ResolveSpellInfo(spellID)
+    alt Spell Name Restricted by Client (Secret String)
+        Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, nil, 1, icon)
+        Combat->>Combat: Queue spellID in pendingSpellResolutions
+        Note over Combat,Client: Player leaves combat
+        Client->>Combat: PLAYER_REGEN_ENABLED
+        Combat->>Combat: ProcessPendingSpellResolutions() -> resolves name & updates DB
+    else Spell Name Cleanly Accessible
+        Combat->>Combat: InferSpellSchool(spellName)
+        Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, spellName, school, icon)
+    end
 ```
 
 ---
@@ -396,6 +406,13 @@ AzerothCreatureCompendiumDB
 ### 6. Automated Static Analysis & WoW Global Whitelisting
 - **Context:** Unchecked Lua code easily introduces global variable pollution (e.g. omitting `local`), silent typos in handler names, and dead variables that complicate debugging and cause memory overhead. However, standard linters emit hundreds of false-positive warnings for World of Warcraft's global API surface.
 - **Decision:** Continuous integration enforces `luacheck` via `.github/workflows/lint.yml` against an authoritative [`.luacheckrc`](../.luacheckrc) configured specifically for WoW Classic. Developers and AI agents can validate changes locally using [lint.ps1](../lint.ps1). Zero warnings and zero errors are enforced.
+
+### 7. Secret String & Taint-Safe Protection (WoW 11.0+ / 12.0+ Compatibility)
+- **Context:** In modern World of Warcraft engine builds (such as Classic Anniversary and 12.0+ beta clients), Blizzard introduced a security sandbox where unit metadata, error messages, and spell names (`C_Spell.GetSpellInfo`, `UnitName`) return "secret string values" when queried in restricted combat contexts. Any attempt to perform string operations (`string.lower`, `tostring`, concatenation, comparisons) on secret strings triggers fatal Lua errors like `attempt to perform string conversion on a secret string value (execution tainted by 'AzerothCreatureCompendium')`.
+- **Decision:** The compendium implements a defensive sanitization barrier:
+  1. `addon:IsSecretValue(val)` and `addon:SafeString(val, fallback)` safely guard all string inputs using `issecretvalue()` and protected call (`pcall`) guards.
+  2. If an enemy spell cast occurs while the spell name is secret, it is temporarily recorded with a placeholder (`"Spell <id>"`) and queued in `addon.pendingSpellResolutions`.
+  3. When combat drops (`PLAYER_REGEN_ENABLED`) or when mob data is retrieved for tooltips/browser (`GetMobData`), deferred spells are automatically resolved to their true names, icons, and inferred spell schools once client restrictions are lifted. This prevents combat taint and crashes completely.
 
 ---
 

@@ -473,7 +473,7 @@ function addon:BuildTreeList()
         end
         table.sort(zoneMobs, function(a, b) return (a.name or "") < (b.name or "") end)
 
-        local zoneMatches = (query == "" or string.find(string.lower(zone.name), query, 1, true))
+        local zoneMatches = (query == "" or string.find(string.lower(zone.name or ""), query, 1, true))
 
         local matchingMobs = {}
         for _, mob in ipairs(zoneMobs) do

@@ -25,6 +25,7 @@ local MECHANIC_PATTERNS = {
 
 
 local function MatchMechanicByName(spellName)
+    spellName = addon:SafeString(spellName, nil)
     if not spellName then return nil, nil end
     local lower = string.lower(spellName)
 
@@ -37,8 +38,10 @@ local function MatchMechanicByName(spellName)
     end
     return nil, nil
 end
+addon.MatchMechanicByName = MatchMechanicByName
 
 local function InferSpellSchool(spellName)
+    spellName = addon:SafeString(spellName, nil)
     if not spellName then return 1, "PHYSICAL", "Physical" end
     local lower = string.lower(spellName)
 
@@ -58,6 +61,40 @@ local function InferSpellSchool(spellName)
 
     return 1, "PHYSICAL", "Physical"
 end
+addon.InferSpellSchool = InferSpellSchool
+
+-- Process deferred spell name resolutions once out of combat
+function addon:ProcessPendingSpellResolutions()
+    if not self.pendingSpellResolutions or not next(self.pendingSpellResolutions) then
+        return
+    end
+
+    for spellID in pairs(self.pendingSpellResolutions) do
+        local resolvedName, resolvedIcon = self:ResolveSpellInfo(spellID)
+        if resolvedName and not string.find(resolvedName, "^Spell %d+") then
+            local schoolNum = InferSpellSchool(resolvedName)
+            if self.db and self.db.zones then
+                for _, zone in pairs(self.db.zones) do
+                    if zone.mobs then
+                        for _, mob in pairs(zone.mobs) do
+                            if mob.combat and mob.combat.spells and mob.combat.spells[spellID] then
+                                local sp = mob.combat.spells[spellID]
+                                sp.name = resolvedName
+                                if schoolNum and schoolNum > 1 then
+                                    sp.school = schoolNum
+                                end
+                                if resolvedIcon then
+                                    sp.icon = resolvedIcon
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            self.pendingSpellResolutions[spellID] = nil
+        end
+    end
+end
 
 -- Create public, unrestricted Event Frame
 local combatFrame = CreateFrame("Frame", "AzerothCompendiumCombatListenerFrame")
@@ -67,6 +104,7 @@ combatFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
 combatFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
 combatFrame:RegisterEvent("UI_ERROR_MESSAGE")
 combatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 combatFrame:SetScript("OnEvent", function(self, event, ...)
     if not addon.db or not addon.db.settings or not addon.db.settings.trackCombat then
@@ -81,25 +119,22 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
         if unit and UnitExists(unit) and UnitCanAttack("player", unit) then
             local guid = UnitGUID(unit)
             local npcID = addon:GetNPCIDFromGUID(guid)
+            spellID = tonumber(spellID)
             if npcID and spellID then
-                local mobName = UnitName(unit) or ("Creature " .. npcID)
+                local mobName = addon:SafeString(UnitName(unit), "Creature " .. npcID)
                 local mapID, zoneName, _ = addon:GetPlayerLocation()
 
-                local spellName, spellTexture = nil, nil
-                if C_Spell and C_Spell.GetSpellInfo then
-                    local info = C_Spell.GetSpellInfo(spellID)
-                    if info then
-                        spellName = info.name
-                        spellTexture = info.iconID
-                    end
-                elseif GetSpellInfo then
-                    spellName, _, spellTexture = GetSpellInfo(spellID)
+                local spellName, spellTexture = addon:ResolveSpellInfo(spellID)
+                local schoolNum = 1
+                if spellName then
+                    schoolNum = InferSpellSchool(spellName)
+                else
+                    -- Spell name is secret/restricted right now during combat; defer resolution until out of combat
+                    addon.pendingSpellResolutions = addon.pendingSpellResolutions or {}
+                    addon.pendingSpellResolutions[spellID] = true
                 end
 
-                if spellName then
-                    local schoolNum = InferSpellSchool(spellName)
-                    addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellID, spellName, schoolNum, spellTexture)
-                end
+                addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellID, spellName, schoolNum, spellTexture)
             end
         end
 
@@ -108,18 +143,12 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     ---------------------------------------------------------------------------
     elseif event == "UNIT_SPELLCAST_SENT" then
         local unit, _, _, spellID = ...
-        if unit == "player" then
-            local spellName = nil
-            if C_Spell and C_Spell.GetSpellInfo then
-                local info = C_Spell.GetSpellInfo(spellID)
-                if info then spellName = info.name end
-            elseif GetSpellInfo then
-                spellName = GetSpellInfo(spellID)
-            end
+        if unit == "player" and spellID then
+            local spellName = addon:ResolveSpellInfo(spellID)
 
             addon.lastPlayerSpell = {
                 id = spellID,
-                name = spellName or "Spell",
+                name = spellName or ("Spell " .. spellID),
                 time = GetTime()
             }
         end
@@ -129,14 +158,15 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     ---------------------------------------------------------------------------
     elseif event == "UI_ERROR_MESSAGE" then
         local _, msg = ...
-        local lowerMsg = string.lower(msg or "")
+        local safeMsg = addon:SafeString(msg, "")
+        local lowerMsg = string.lower(safeMsg)
 
         if string.find(lowerMsg, "immune", 1, true) then
             if UnitExists("target") and UnitCanAttack("player", "target") then
                 local guid = UnitGUID("target")
                 local npcID = addon:GetNPCIDFromGUID(guid)
                 if npcID then
-                    local mobName = UnitName("target") or ("Creature " .. npcID)
+                    local mobName = addon:SafeString(UnitName("target"), "Creature " .. npcID)
                     local mapID, zoneName, _ = addon:GetPlayerLocation()
 
                     -- Check what spell player recently cast
@@ -166,11 +196,17 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
             local guid = UnitGUID("target")
             local npcID = addon:GetNPCIDFromGUID(guid)
             if npcID and not addon.killedCorpseGUIDs[guid] then
-                local mobName = UnitName("target") or ("Creature " .. npcID)
+                local mobName = addon:SafeString(UnitName("target"), "Creature " .. npcID)
                 local mapID, zoneName, coords = addon:GetPlayerLocation()
                 addon:MarkCorpseKilled(guid)
                 addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
             end
         end
+
+    ---------------------------------------------------------------------------
+    -- 5. Out of Combat: Resolve Deferred Spells
+    ---------------------------------------------------------------------------
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        addon:ProcessPendingSpellResolutions()
     end
 end)

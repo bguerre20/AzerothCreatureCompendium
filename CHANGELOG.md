@@ -1,5 +1,10 @@
 # Azeroth Creature Compendium
 
+## v0.9.7-beta (2026-10-02)
+- **Combat Ability & Spellcast Fix:** Fixed a Lua error ("attempt to perform string conversion on a secret string value") when nearby hostile creatures (such as Frostmane Novices casting Weak Frostbolt or Grik'nir the Cold casting Frost Shock) cast spells in the player's presence.
+- **Modern Client Compatibility:** Added automatic safeguards for restricted combat strings introduced in recent game engine updates, ensuring spells cast during combat are safely captured and seamlessly resolved once out of combat.
+- **Database Self-Healing:** The compendium automatically repairs any placeholder spell names from previous combat encounters as soon as you view the creature or exit combat.
+
 ## v0.9.6-beta (2026-10-02)
 - **Bestiary Progression Ranks:** Mobs will now level up in rank as you interact with them (kills, loots, and harvests). Track your progression from *Safari Greenhorn* all the way up to *The Hemetinator* directly on the creature's Pokédex card.
 - **Zone Progression Tooltips:** Hover over a zone in the Compendium registry list to see a full breakdown of the species documented and ranks mastered in that area.

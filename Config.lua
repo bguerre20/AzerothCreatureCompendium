@@ -117,7 +117,41 @@ addon.TAUNT_SPELLS = {
     [56222] = true, -- Dark Command
 }
 
--- Message printer helpe
+-- Secret value detection (WoW 11.0+ / 12.0+ security protection against combat-tainted secret strings)
+function addon:IsSecretValue(val)
+    if val == nil then return false end
+    if issecretvalue and issecretvalue(val) then
+        return true
+    end
+    -- In WoW 11.0+, secret values error on tostring or string operations when execution is tainted
+    local ok = pcall(function()
+        local _ = tostring(val)
+    end)
+    if not ok then return true end
+    if type(val) == "string" then
+        local okOps = pcall(function()
+            local _ = string.sub(val, 1, 0)
+            local _ = (val == "")
+        end)
+        if not okOps then return true end
+    end
+    return false
+end
+
+-- Safe string coercion returning fallback if val is secret, nil, or invalid
+function addon:SafeString(val, fallback)
+    if val == nil or self:IsSecretValue(val) then
+        return fallback
+    end
+    if type(val) == "string" then
+        return val
+    elseif type(val) == "number" then
+        return tostring(val)
+    end
+    return fallback
+end
+
+-- Message printer helper
 function addon:Print(msg, ...)
     if select("#", ...) > 0 then
         msg = string.format(msg, ...)

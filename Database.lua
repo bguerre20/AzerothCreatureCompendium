@@ -187,6 +187,19 @@ function addon:InitDatabase()
         end
     end
 
+    -- Sanitize existing zone, mob, and spell names against tainted/secret strings
+    for mapID, zone in pairs(db.zones) do
+        zone.name = self:SafeString(zone.name, "Zone " .. mapID)
+        for npcID, mob in pairs(zone.mobs or {}) do
+            mob.name = self:SafeString(mob.name, "Creature " .. npcID)
+            if mob.combat and mob.combat.spells then
+                for spellID, sp in pairs(mob.combat.spells) do
+                    sp.name = self:SafeString(sp.name, "Spell " .. spellID)
+                end
+            end
+        end
+    end
+
     -- Keep BgLootLoggerDB synchronized so existing backups remain valid
     BgLootLoggerDB = db
 
@@ -198,8 +211,8 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not npcID or npcID <= 0 then return nil end
     if not self.db then self:InitDatabase() end
     mapID = mapID or 0
-    zoneName = zoneName or "Unknown Zone"
-    mobName = mobName or ("Creature " .. npcID)
+    zoneName = self:SafeString(zoneName, "Unknown Zone")
+    mobName = self:SafeString(mobName, "Creature " .. npcID)
 
     -- 1. Ensure Zone exists
     local zone = self.db.zones[mapID]
@@ -320,6 +333,8 @@ end
 
 -- Update creature metadata from unit inspection (target, mouseover, nameplates)
 function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType, coords)
+    classification = self:SafeString(classification, nil)
+    creatureType = self:SafeString(creatureType, nil)
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -553,6 +568,13 @@ end
 -- Records a spell cast by creature
 function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
     if not spellId then return end
+    spellId = tonumber(spellId)
+    if not spellId then return end
+
+    zoneName = self:SafeString(zoneName, "Unknown Zone")
+    mobName = self:SafeString(mobName, "Creature " .. npcID)
+    spellName = self:SafeString(spellName, nil)
+
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -578,12 +600,19 @@ function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellNa
     spell.casts = (spell.casts or 0) + 1
     if spellName and spellName ~= "" then spell.name = spellName end
     if icon then spell.icon = icon end
-    if spellSchool then spell.school = spellSchool end
+    if spellSchool and spellSchool > 1 then spell.school = spellSchool end
 end
 
 -- Records spell damage dealt by creature
 function addon:RecordSpellDamage(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, overkill, isPeriodic, icon)
     if not spellId then return end
+    spellId = tonumber(spellId)
+    if not spellId then return end
+
+    zoneName = self:SafeString(zoneName, "Unknown Zone")
+    mobName = self:SafeString(mobName, "Creature " .. npcID)
+    spellName = self:SafeString(spellName, nil)
+
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -609,6 +638,13 @@ end
 -- Records spell healing done by creature
 function addon:RecordSpellHeal(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, icon)
     if not spellId then return end
+    spellId = tonumber(spellId)
+    if not spellId then return end
+
+    zoneName = self:SafeString(zoneName, "Unknown Zone")
+    mobName = self:SafeString(mobName, "Creature " .. npcID)
+    spellName = self:SafeString(spellName, nil)
+
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -635,6 +671,13 @@ end
 -- Records aura application by creature
 function addon:RecordSpellAura(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, auraType, icon)
     if not spellId then return end
+    spellId = tonumber(spellId)
+    if not spellId then return end
+
+    zoneName = self:SafeString(zoneName, "Unknown Zone")
+    mobName = self:SafeString(mobName, "Creature " .. npcID)
+    spellName = self:SafeString(spellName, nil)
+
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -651,7 +694,12 @@ end
 
 -- Records an observed immunity on a creature
 function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immunityType, immunityName, school)
+    immunityKey = self:SafeString(immunityKey, nil)
     if not immunityKey or immunityKey == "" then return end
+    zoneName = self:SafeString(zoneName, "Unknown Zone")
+    mobName = self:SafeString(mobName, "Creature " .. npcID)
+    immunityName = self:SafeString(immunityName, immunityKey)
+
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     if not mob then return end
 
@@ -660,7 +708,7 @@ function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immu
         imm = {
             key = immunityKey,
             type = immunityType or "SCHOOL",
-            name = immunityName or immunityKey,
+            name = immunityName,
             school = school,
             count = 0,
             firstSeen = time(),
@@ -683,6 +731,27 @@ function addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
     end
 end
 
+local function ResolveMobSpells(mob)
+    if not mob or not mob.combat or not mob.combat.spells then return end
+    for spellID, sp in pairs(mob.combat.spells) do
+        if not sp.name or string.find(sp.name, "^Spell %d+") then
+            local rName, rIcon = addon:ResolveSpellInfo(spellID)
+            if rName and not string.find(rName, "^Spell %d+") then
+                sp.name = rName
+                if addon.InferSpellSchool then
+                    local sNum = addon:InferSpellSchool(rName)
+                    if sNum and sNum > 1 then
+                        sp.school = sNum
+                    end
+                end
+                if rIcon then
+                    sp.icon = rIcon
+                end
+            end
+        end
+    end
+end
+
 -- Retrieve mob data (current zone first, then cross-zone fallback)
 function addon:GetMobData(npcID, mapID)
     if not npcID or not self.db or not self.db.zones then
@@ -693,7 +762,9 @@ function addon:GetMobData(npcID, mapID)
 
     -- Current zone check
     if self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID] then
-        return self.db.zones[mapID].mobs[npcID], self.db.zones[mapID].name, true
+        local mob = self.db.zones[mapID].mobs[npcID]
+        ResolveMobSpells(mob)
+        return mob, self.db.zones[mapID].name, true
     end
 
     -- Fallback: check cross-zone registry
@@ -716,6 +787,7 @@ function addon:GetMobData(npcID, mapID)
         end
 
         if bestMob then
+            ResolveMobSpells(bestMob)
             return bestMob, bestZoneName, false
         end
     end
