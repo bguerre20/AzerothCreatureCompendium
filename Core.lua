@@ -326,7 +326,7 @@ function addon:ProcessLoot()
         local slotType = GetLootSlotType(slot)
 
         if slotType == LOOT_MONEY then
-            local icon, name, quantity = GetLootSlotInfo(slot)
+            local _, name, quantity = GetLootSlotInfo(slot)
             local parsed = self:ParseMoneyString(name)
             if parsed > 0 then
                 moneyCopper = moneyCopper + parsed
@@ -410,7 +410,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             addon:Print("Loaded. Type |cffffd100/acc|r for Compendium window or |cffffd100/acc options|r for settings.")
         end
     elseif event == "UNIT_SPELLCAST_START" then
-        local unit, castGUID, spellID = ...
+        local unit, _, spellID = ...
         if unit == "player" and spellID then
             local prof = addon:IdentifyGatheringSpell(spellID)
             if prof then
@@ -423,7 +423,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        local unit, castGUID, spellID = ...
+        local unit, _, spellID = ...
         if unit == "player" and spellID then
             local prof = addon:IdentifyGatheringSpell(spellID) or (addon.activeGatherCast and addon.activeGatherCast.profession)
             if prof then

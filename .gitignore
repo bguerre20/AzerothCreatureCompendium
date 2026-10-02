@@ -1,4 +1,4 @@
-﻿# IDE & Editor folders
+# IDE & Editor folders
 .vscode/
 .idea/
 .gemini/
@@ -18,3 +18,5 @@ Desktop.ini
 *.tmp
 *~
 *.orig
+lint-report.txt
+.tools/
