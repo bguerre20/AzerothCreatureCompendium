@@ -407,12 +407,13 @@ AzerothCreatureCompendiumDB
 - **Context:** Unchecked Lua code easily introduces global variable pollution (e.g. omitting `local`), silent typos in handler names, and dead variables that complicate debugging and cause memory overhead. However, standard linters emit hundreds of false-positive warnings for World of Warcraft's global API surface.
 - **Decision:** Continuous integration enforces `luacheck` via `.github/workflows/lint.yml` against an authoritative [`.luacheckrc`](../.luacheckrc) configured specifically for WoW Classic. Developers and AI agents can validate changes locally using [lint.ps1](../lint.ps1). Zero warnings and zero errors are enforced.
 
-### 7. Secret String & Taint-Safe Protection (WoW 11.0+ / 12.0+ Compatibility)
-- **Context:** In modern World of Warcraft engine builds (such as Classic Anniversary and 12.0+ beta clients), Blizzard introduced a security sandbox where unit metadata, error messages, and spell names (`C_Spell.GetSpellInfo`, `UnitName`) return "secret string values" when queried in restricted combat contexts. Any attempt to perform string operations (`string.lower`, `tostring`, concatenation, comparisons) on secret strings triggers fatal Lua errors like `attempt to perform string conversion on a secret string value (execution tainted by 'AzerothCreatureCompendium')`.
+### 7. Secret Value & Taint-Safe Protection (WoW 11.0+ / 12.0+ Compatibility)
+- **Context:** In modern World of Warcraft engine builds, Blizzard introduced a security sandbox where unit metadata, event payloads (`spellID`), and spell names (`C_Spell.GetSpellInfo`) frequently return "secret values" when queried in restricted combat contexts. Any attempt to perform string operations on secret strings triggers `attempt to perform string conversion on a secret string value`, and using secret numbers as table keys triggers `attempted to perform indexed assignment on a table that cannot be indexed with secret keys`.
 - **Decision:** The compendium implements a defensive sanitization barrier:
-  1. `addon:IsSecretValue(val)` and `addon:SafeString(val, fallback)` safely guard all string inputs using `issecretvalue()` and protected call (`pcall`) guards.
-  2. If an enemy spell cast occurs while the spell name is secret, it is temporarily recorded with a placeholder (`"Spell <id>"`) and queued in `addon.pendingSpellResolutions`.
-  3. When combat drops (`PLAYER_REGEN_ENABLED`) or when mob data is retrieved for tooltips/browser (`GetMobData`), deferred spells are automatically resolved to their true names, icons, and inferred spell schools once client restrictions are lifted. This prevents combat taint and crashes completely.
+  1. `addon:IsSecretValue(val)` safely guards all inputs using `issecretvalue()` and protected call (`pcall`) guards.
+  2. If the `spellID` returned from `UNIT_SPELLCAST_START` is a secret number, the engine gracefully attempts a fallback query to the global `UnitCastingInfo` or `UnitChannelInfo` APIs to fetch an untainted ID. If the fallback is also restricted, the event is safely dropped to guarantee zero UI crashes.
+  3. If the spell name is secret during combat, it is temporarily recorded with a placeholder (`"Spell <id>"`) and queued in `addon.pendingSpellResolutions`.
+  4. When combat drops (`PLAYER_REGEN_ENABLED`) or when mob data is retrieved for tooltips/browser (`GetMobData`), deferred spells are automatically resolved to their true names, icons, and inferred spell schools once client restrictions are lifted.
 
 ---
 

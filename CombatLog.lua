@@ -115,23 +115,54 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 1. Unit Spellcast Tracking (Enemy Casts)
     ---------------------------------------------------------------------------
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local unit, _, spellID = ...
+        local unit, _, eventSpellID = ...
         if unit and UnitExists(unit) and UnitCanAttack("player", unit) then
+            local spellID = eventSpellID
+
+            -- Blizzard's secret value system obfuscates combat payload data.
+            -- If the event payload gives a secret key, try fetching from the global API.
+            if addon:IsSecretValue(spellID) then
+                if event ~= "UNIT_SPELLCAST_SUCCEEDED" then
+                    local _, _, _, _, _, _, _, _, castID = UnitCastingInfo(unit)
+                    if not castID then
+                        _, _, _, _, _, _, _, castID = UnitChannelInfo(unit)
+                    end
+                    spellID = castID
+                else
+                    -- We cannot query UnitCastingInfo for a succeeded cast as it's already over.
+                    spellID = nil
+                end
+            end
+
+            -- If it's STILL secret (or missing), record a single placeholder ability
+            if not spellID or addon:IsSecretValue(spellID) then
+                spellID = -1
+            end
+
             local guid = UnitGUID(unit)
             local npcID = addon:GetNPCIDFromGUID(guid)
             spellID = tonumber(spellID)
+
             if npcID and spellID then
                 local mobName = addon:SafeString(UnitName(unit), "Creature " .. npcID)
                 local mapID, zoneName, _ = addon:GetPlayerLocation()
 
-                local spellName, spellTexture = addon:ResolveSpellInfo(spellID)
+                local spellName, spellTexture
                 local schoolNum = 1
-                if spellName then
-                    schoolNum = InferSpellSchool(spellName)
+                
+                if spellID == -1 then
+                    spellName = "Unknown (Protected Ability)"
+                    spellTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
+                    schoolNum = 1
                 else
-                    -- Spell name is secret/restricted right now during combat; defer resolution until out of combat
-                    addon.pendingSpellResolutions = addon.pendingSpellResolutions or {}
-                    addon.pendingSpellResolutions[spellID] = true
+                    spellName, spellTexture = addon:ResolveSpellInfo(spellID)
+                    if spellName then
+                        schoolNum = InferSpellSchool(spellName)
+                    else
+                        -- Spell name is restricted right now during combat; defer resolution until out of combat
+                        addon.pendingSpellResolutions = addon.pendingSpellResolutions or {}
+                        addon.pendingSpellResolutions[spellID] = true
+                    end
                 end
 
                 addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellID, spellName, schoolNum, spellTexture)
@@ -142,8 +173,16 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 2. Player Spell Sent (To associate with "Target is immune" errors)
     ---------------------------------------------------------------------------
     elseif event == "UNIT_SPELLCAST_SENT" then
-        local unit, _, _, spellID = ...
-        if unit == "player" and spellID then
+        local unit, _, _, eventSpellID = ...
+        if unit == "player" and eventSpellID then
+            local spellID = eventSpellID
+            if addon:IsSecretValue(spellID) then
+                local _, _, _, _, _, _, _, _, castID = UnitCastingInfo(unit)
+                if not castID then _, _, _, _, _, _, _, castID = UnitChannelInfo(unit) end
+                spellID = castID
+            end
+            if not spellID or addon:IsSecretValue(spellID) then return end
+
             local spellName = addon:ResolveSpellInfo(spellID)
 
             addon.lastPlayerSpell = {

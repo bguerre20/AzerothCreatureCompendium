@@ -1,8 +1,9 @@
 # Azeroth Creature Compendium
 
 ## v0.9.7-beta (2026-10-02)
-- **Combat Ability & Spellcast Fix:** Fixed a Lua error ("attempt to perform string conversion on a secret string value") when nearby hostile creatures (such as Frostmane Novices casting Weak Frostbolt or Grik'nir the Cold casting Frost Shock) cast spells in the player's presence.
-- **Modern Client Compatibility:** Added automatic safeguards for restricted combat strings introduced in recent game engine updates, ensuring spells cast during combat are safely captured and seamlessly resolved once out of combat.
+- **Combat Ability & Spellcast Fix:** Fixed Lua errors ("attempt to perform string conversion on a secret string value" and "attempted to perform indexed assignment on a table that cannot be indexed with secret keys") when nearby hostile creatures cast spells in the player's presence.
+- **Modern Client Compatibility:** Added automatic safeguards for restricted combat strings and secret payload numbers introduced in recent game engine updates (11.0.0+), ensuring spells cast during combat are safely captured via global API fallbacks.
+- **Protected Ability Aggregation:** Abilities that are completely obfuscated by Blizzard's new engine protections are now aggregated into a single, clean `Unknown (Protected Ability)` entry in a creature's combat profile rather than causing the UI to crash or failing to record.
 - **Database Self-Healing:** The compendium automatically repairs any placeholder spell names from previous combat encounters as soon as you view the creature or exit combat.
 
 ## v0.9.6-beta (2026-10-02)

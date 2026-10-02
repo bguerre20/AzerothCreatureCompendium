@@ -430,8 +430,16 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             addon:Print("Loaded. Type |cffffd100/acc|r for Compendium window or |cffffd100/acc options|r for settings.")
         end
     elseif event == "UNIT_SPELLCAST_START" then
-        local unit, _, spellID = ...
-        if unit == "player" and spellID then
+        local unit, _, eventSpellID = ...
+        if unit == "player" and eventSpellID then
+            local spellID = eventSpellID
+            if addon:IsSecretValue(spellID) then
+                local _, _, _, _, _, _, _, _, castID = UnitCastingInfo(unit)
+                if not castID then _, _, _, _, _, _, _, castID = UnitChannelInfo(unit) end
+                spellID = castID
+            end
+            if not spellID or addon:IsSecretValue(spellID) then return end
+
             local prof = addon:IdentifyGatheringSpell(spellID)
             if prof then
                 addon.activeGatherCast = {
@@ -443,14 +451,21 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        local unit, _, spellID = ...
-        if unit == "player" and spellID then
+        local unit, _, eventSpellID = ...
+        if unit == "player" and eventSpellID then
+            local spellID = eventSpellID
+            if addon:IsSecretValue(spellID) then
+                -- Can't fetch from UnitCastingInfo since it's already succeeded/finished
+                spellID = nil
+            end
+            if not spellID and not addon.activeGatherCast then return end
+            
             local prof = addon:IdentifyGatheringSpell(spellID) or (addon.activeGatherCast and addon.activeGatherCast.profession)
             if prof then
                 local targetGUID = (addon.activeGatherCast and addon.activeGatherCast.targetGUID) or UnitGUID("target") or UnitGUID("mouseover")
                 addon.recentProfessionHarvest = {
                     profession = prof,
-                    spellID = spellID,
+                    spellID = spellID or (addon.activeGatherCast and addon.activeGatherCast.spellID),
                     time = GetTime(),
                     targetGUID = targetGUID,
                 }
