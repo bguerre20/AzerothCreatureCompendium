@@ -4,7 +4,7 @@
     (Completely avoids restricted COMBAT_LOG_EVENT_UNFILTERED).
 ]]
 
-local ADDON_NAME, addon = ...
+local _, addon = ...
 
 -- Runtime caches
 addon.lastPlayerSpell = nil
@@ -23,16 +23,6 @@ local MECHANIC_PATTERNS = {
     { key = "POISON",    name = "Poison",         patterns = { "deadly poison", "instant poison", "wound poison", "mind-numbing poison", "serpent sting" } },
 }
 
--- Known school names in lowercase
-local SCHOOL_NAMES = {
-    fire     = { key = "FIRE",    name = "Fire",    school = 4 },
-    frost    = { key = "FROST",   name = "Frost",   school = 16 },
-    nature   = { key = "NATURE",  name = "Nature",  school = 8 },
-    shadow   = { key = "SHADOW",  name = "Shadow",  school = 32 },
-    arcane   = { key = "ARCANE",  name = "Arcane",  school = 64 },
-    holy     = { key = "HOLY",    name = "Holy",    school = 2 },
-    physical = { key = "PHYSICAL",name = "Physical",school = 1 },
-}
 
 local function MatchMechanicByName(spellName)
     if not spellName then return nil, nil end
@@ -138,7 +128,7 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 3. Immunity Detection via Game Error Message
     ---------------------------------------------------------------------------
     elseif event == "UI_ERROR_MESSAGE" then
-        local errorType, msg = ...
+        local _, msg = ...
         local lowerMsg = string.lower(msg or "")
 
         if string.find(lowerMsg, "immune", 1, true) then
@@ -175,9 +165,10 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
         if UnitExists("target") and UnitIsDead("target") and UnitCanAttack("player", "target") then
             local guid = UnitGUID("target")
             local npcID = addon:GetNPCIDFromGUID(guid)
-            if npcID and not addon.lootedCorpseGUIDs[guid] then
+            if npcID and not addon.killedCorpseGUIDs[guid] then
                 local mobName = UnitName("target") or ("Creature " .. npcID)
                 local mapID, zoneName, coords = addon:GetPlayerLocation()
+                addon:MarkCorpseKilled(guid)
                 addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
             end
         end
