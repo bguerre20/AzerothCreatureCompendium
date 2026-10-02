@@ -136,7 +136,7 @@ function addon:PopulateLootContent(tip, mob)
             local nameColored = self:FormatQualityName(item.name, item.quality)
             local leftCol = iconStr .. nameColored
 
-            local rightCol = ""
+            local rightCol
             if self.db.settings.showSample and item.dropLootCount then
                 rightCol = string.format("|cffffffff%s|r |cff888888(%d)|r", item.dropChance or "0%", item.dropLootCount)
             else
@@ -185,7 +185,7 @@ function addon:PopulateProfessionContent(tip, mob)
             local nameColored = self:FormatQualityName(item.name, item.quality)
             local leftCol = iconStr .. profTag .. nameColored
 
-            local rightCol = ""
+            local rightCol
             if self.db.settings.showSample and (item.dropLootCount or item.harvestCount) then
                 rightCol = string.format("|cffffffff%s|r |cff888888(%d)|r", item.dropChance or "0%", item.dropLootCount or item.harvestCount or 0)
             else
@@ -262,7 +262,7 @@ function addon:PopulateCombatContent(tip, mob)
     -- 3. Melee / Auto-Attacks
     local atk = combat.attacks
     if atk and (atk.swings or 0) > 0 then
-        local dmgStr = ""
+        local dmgStr
         if atk.minDmg > 0 and atk.maxDmg > 0 then
             dmgStr = string.format("|cffffffff%d - %d|r (avg |cffffd100%d|r)", atk.minDmg, atk.maxDmg, atk.avgDmg)
         else
@@ -287,7 +287,7 @@ function addon:PopulateCombatContent(tip, mob)
             local spellNameCol = string.format("|cff%s%s|r", schoolHex, sp.name or ("Spell " .. sp.id))
             local leftCol = "  " .. iconStr .. spellNameCol
 
-            local rightCol = ""
+            local rightCol
             if sp.avgDmg and sp.avgDmg > 0 then
                 rightCol = string.format("|cffffffff%d-%d|r |cff888888(%d casts)|r", sp.minDmg or sp.avgDmg, sp.maxDmg or sp.avgDmg, sp.casts or 1)
             elseif sp.isHeal then

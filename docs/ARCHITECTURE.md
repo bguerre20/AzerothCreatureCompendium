@@ -121,6 +121,9 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | [AzerothCreatureCompendium.toc](../AzerothCreatureCompendium.toc) | Blizzard addon manifest defining load order, SavedVariables, interface versions, and metadata. | World of Warcraft Client, BigWigs Packager |
 | [.pkgmeta](../.pkgmeta) | Packaging configuration: specifies zip ignore patterns and binds `manual-changelog` to `CHANGELOG.md`. | BigWigs Packager (`release.sh`) |
 | [CHANGELOG.md](../CHANGELOG.md) | Single source of truth for player-centric release notes. Consumed by BigWigs Packager to publish clean notes on CurseForge. | CurseForge, GitHub Releases, End Users |
+| [.luacheckrc](../.luacheckrc) | Static analysis configuration for LuaCheck defining WoW Classic globals and code quality rules. | GitHub Actions CI (`lint.yml`), `lint.ps1`, Developers |
+| [lint.ps1](../lint.ps1) | Local Windows PowerShell runner that executes or auto-downloads LuaCheck and generates audit reports. | Developers, AI Agents |
+| [.github/workflows/lint.yml](../.github/workflows/lint.yml) | Continuous Integration workflow running `lunarmodules/luacheck@v1` on pushes and PRs. | GitHub Actions CI |
 
 ---
 
@@ -390,6 +393,10 @@ AzerothCreatureCompendiumDB
 - **Context:** Manual zip archiving and uploading to CurseForge/GitHub is error-prone, risks committing local development artifacts, causes version drift between TOC manifests and in-game UI, and leaks internal git commit logs into public release notes.
 - **Decision:** Releases are automated via `BigWigsMods/packager@v2` triggered on Git tag push (`v*`). Development tools and docs are excluded via [`.pkgmeta`](../.pkgmeta). To guarantee clean, player-centric release notes on CurseForge without git commit dumps or issue closures, `.pkgmeta` configures `manual-changelog` pointing to [`CHANGELOG.md`](../CHANGELOG.md). The TOC manifest and config dynamically interpolate `@project-version@` tags into the authoritative `addon.VERSION` constant, adhering strictly to Semantic Versioning (`MAJOR.MINOR.PATCH`).
 
+### 6. Automated Static Analysis & WoW Global Whitelisting
+- **Context:** Unchecked Lua code easily introduces global variable pollution (e.g. omitting `local`), silent typos in handler names, and dead variables that complicate debugging and cause memory overhead. However, standard linters emit hundreds of false-positive warnings for World of Warcraft's global API surface.
+- **Decision:** Continuous integration enforces `luacheck` via `.github/workflows/lint.yml` against an authoritative [`.luacheckrc`](../.luacheckrc) configured specifically for WoW Classic. Developers and AI agents can validate changes locally using [lint.ps1](../lint.ps1). Zero warnings and zero errors are enforced.
+
 ---
 
 ## 🤖 Guidelines for Contributors & AI Agents
@@ -402,3 +409,5 @@ When implementing new features or modifying the codebase, adhere to these mandat
 4. **Coordinate Policy Adherence:** Never record coordinates for non-rare creatures unless explicitly configured by the user.
 5. **UI Scaling & Screen Clamping:** When modifying sidecar or browser frames, ensure `SetClampedToScreen(true)` and dynamic parent scaling are preserved so elements render properly across 1080p, 1440p, 4K, and custom UI scales.
 6. **Deploy & Validate:** Always verify scripts via PowerShell syntax checking and test deployment using [deploy.ps1](../deploy.ps1).
+7. **Static Analysis & Linting:** Always run `powershell -ExecutionPolicy Bypass -File .\lint.ps1` before proposing changes. Code must pass with 0 warnings and 0 errors against `.luacheckrc`.
+

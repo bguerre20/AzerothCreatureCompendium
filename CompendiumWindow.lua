@@ -579,7 +579,7 @@ function addon:UpdateTreeListRows()
                 row.title:SetText(string.format("%s%s|r%s", col, data.name, coordTag))
                 row.title:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
 
-                local killsOrLoots = ""
+                local killsOrLoots
                 if isRareMob and (not mob.kills or mob.kills == 0) and (not mob.loot or not mob.loot.totalLoots or mob.loot.totalLoots == 0) then
                     killsOrLoots = "|cffe0e0e0[Rare]|r"
                 elseif mob.kills and mob.kills > 0 then
@@ -701,7 +701,7 @@ end
 -- Populate Combat Tab Rows
 function addon:PopulateRightCombatTab(mob)
     local imms = self:GetMobImmunities(mob)
-    local subHeaderText = ""
+    local subHeaderText
 
     if #imms > 0 then
         subHeaderText = "|cffffd100Immunities:|r "
@@ -801,7 +801,7 @@ function addon:UpdateRightCardRows()
                 local extraTag = sp.isAutoAttack and "|cffffffff[Melee]|r" or (sp.isHeal and "|cff44ff44[Heal]|r" or (sp.isBuff and "|cff71d5ff[Buff]|r" or (sp.isDebuff and "|cffff5533[Debuff]|r" or "")))
                 row.desc:SetText(extraTag)
 
-                local valStr = ""
+                local valStr
                 if sp.isAutoAttack then
                     valStr = "|cffffffffPhysical Attack|r"
                 elseif sp.avgDmg and sp.avgDmg > 0 then

@@ -77,7 +77,7 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 1. Unit Spellcast Tracking (Enemy Casts)
     ---------------------------------------------------------------------------
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local unit, castGUID, spellID = ...
+        local unit, _, spellID = ...
         if unit and UnitExists(unit) and UnitCanAttack("player", unit) then
             local guid = UnitGUID(unit)
             local npcID = addon:GetNPCIDFromGUID(guid)
@@ -107,7 +107,7 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 2. Player Spell Sent (To associate with "Target is immune" errors)
     ---------------------------------------------------------------------------
     elseif event == "UNIT_SPELLCAST_SENT" then
-        local unit, target, castGUID, spellID = ...
+        local unit, _, _, spellID = ...
         if unit == "player" then
             local spellName = nil
             if C_Spell and C_Spell.GetSpellInfo then

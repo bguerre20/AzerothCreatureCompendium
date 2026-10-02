@@ -322,11 +322,7 @@ function addon:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCop
     loot.totalLoots = (loot.totalLoots or 0) + 1
     mob.totalLoots = loot.totalLoots
 
-    local hasAnyItem = false
-    for _ in pairs(itemsLooted) do
-        hasAnyItem = true
-        break
-    end
+    local hasAnyItem = next(itemsLooted) ~= nil
 
     if not hasAnyItem and moneyCopper == 0 then
         loot.emptyLoots = (loot.emptyLoots or 0) + 1
@@ -424,11 +420,7 @@ function addon:RecordProfessionLoot(mapID, zoneName, npcID, mobName, professionN
     prof.bySkill[professionName] = prof.bySkill[professionName] or { totalHarvests = 0, emptyHarvests = 0 }
     prof.bySkill[professionName].totalHarvests = prof.bySkill[professionName].totalHarvests + 1
 
-    local hasAnyItem = false
-    for _ in pairs(itemsLooted) do
-        hasAnyItem = true
-        break
-    end
+    local hasAnyItem = next(itemsLooted) ~= nil
 
     if not hasAnyItem then
         prof.emptyHarvests = (prof.emptyHarvests or 0) + 1
