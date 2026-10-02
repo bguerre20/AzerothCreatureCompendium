@@ -1,6 +1,6 @@
 # Azeroth Creature Compendium
 
-## v0.9.8-beta (2026-10-02)
+## v0.10.0-beta (2026-10-02)
 - **Creature Subzone Tracking:** The compendium now records the specific local areas and subzones where each creature is sighted (e.g. *Coldridge Pass* or *Kharanos* within *Dun Morogh*).
 - **Sub-Location Compendium Display:** A new "Found in:" entry on each creature's Pokédex card displays all unique subzones where you've encountered that mob (e.g. *"Found in: Coldridge Valley and Kharanos"*).
 - **Subzone Search Filtering:** The Compendium search bar now matches local subzone names, allowing you to instantly find all creatures documented in a specific pass, camp, valley, or town.
