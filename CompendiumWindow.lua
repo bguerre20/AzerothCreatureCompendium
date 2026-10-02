@@ -173,10 +173,18 @@ function addon:CreateCompendiumWindow()
                 local r1 = data.rankCounts[1] or 0
 
                 local details = {}
-                if r4 > 0 then table.insert(details, string.format("|cffa335ee%d Hemetinator|r", r4)) end
-                if r3 > 0 then table.insert(details, string.format("|cff0070dd%d Master|r", r3)) end
-                if r2 > 0 then table.insert(details, string.format("|cff1eff00%d Apprentice|r", r2)) end
-                if r1 > 0 then table.insert(details, string.format("|cffe0e0e0%d Greenhorn|r", r1)) end
+                if r4 > 0 and addon.RESEARCH_RANKS[4] then
+                    table.insert(details, string.format("|T%s:12:12:0:0|t |cffa335ee%d Hemetinator|r", addon.RESEARCH_RANKS[4].icon, r4))
+                end
+                if r3 > 0 and addon.RESEARCH_RANKS[3] then
+                    table.insert(details, string.format("|T%s:12:12:0:0|t |cff0070dd%d Master|r", addon.RESEARCH_RANKS[3].icon, r3))
+                end
+                if r2 > 0 and addon.RESEARCH_RANKS[2] then
+                    table.insert(details, string.format("|T%s:12:12:0:0|t |cff1eff00%d Apprentice|r", addon.RESEARCH_RANKS[2].icon, r2))
+                end
+                if r1 > 0 and addon.RESEARCH_RANKS[1] then
+                    table.insert(details, string.format("|T%s:12:12:0:0|t |cffe0e0e0%d Greenhorn|r", addon.RESEARCH_RANKS[1].icon, r1))
+                end
 
                 if #details > 0 then
                     GameTooltip:AddLine(table.concat(details, "  ·  "), 1, 1, 1)
@@ -746,14 +754,15 @@ function addon:RefreshSelectedMobCard()
     end
 
     if self.mobRankText then
-        local _, rankName, rankColor, interactions, nextThreshold = addon:GetMobResearchRank(mob)
+        local _, rankName, rankColor, interactions, nextThreshold, rankIcon = addon:GetMobResearchRank(mob)
         local progressStr
         if nextThreshold > 0 then
             progressStr = string.format(" |cff888888(%d/%d to next rank)|r", interactions, nextThreshold)
         else
             progressStr = " |cff888888(Max Rank)|r"
         end
-        self.mobRankText:SetText(string.format("Research Rank: |cff%s%s|r%s", rankColor, rankName, progressStr))
+        local iconStr = (rankIcon and string.format("|T%s:14:14:0:0|t ", rankIcon)) or ""
+        self.mobRankText:SetText(string.format("Research Rank: %s|cff%s%s|r%s", iconStr, rankColor, rankName, progressStr))
 
         self.mobRankText:ClearAllPoints()
         if self.mobCoordsText and self.mobCoordsText:IsShown() then

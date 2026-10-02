@@ -1,5 +1,9 @@
 # Azeroth Creature Compendium
 
+## v0.10.1-beta (2026-10-02)
+- **Bestiary Progression Badges & Medals:** Added classic World of Warcraft medallion and portrait iconography to the creature research rank system. View bronze, silver, gold medallions, and the Hemet Nesingwary dwarf hunter badge directly on each creature's Pokédex card and inside zone mastery tooltips.
+- **Release Channel Synchronization:** Addon updates now automatically publish package releases to both CurseForge and GitHub Releases.
+
 ## v0.10.0-beta (2026-10-02)
 - **Creature Subzone Tracking:** The compendium now records the specific local areas and subzones where each creature is sighted (e.g. *Coldridge Pass* or *Kharanos* within *Dun Morogh*).
 - **Sub-Location Compendium Display:** A new "Found in:" entry on each creature's Pokédex card displays all unique subzones where you've encountered that mob (e.g. *"Found in: Coldridge Valley and Kharanos"*).

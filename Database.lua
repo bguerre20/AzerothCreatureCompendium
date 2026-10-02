@@ -18,20 +18,21 @@ end
 
 -- Bestiary Progression Ranks
 addon.RESEARCH_RANKS = {
-    { interactions = 1,   name = "Safari Greenhorn", color = "e0e0e0" },
-    { interactions = 35,  name = "Nesingwary's Apprentice", color = "1eff00" },
-    { interactions = 100, name = "Master of the Hunt", color = "0070dd" },
-    { interactions = 500, name = "The Hemetinator", color = "a335ee" },
+    { interactions = 1,   name = "Safari Greenhorn",        color = "e0e0e0", icon = "Interface\\Icons\\INV_Jewelry_Talisman_07" },
+    { interactions = 35,  name = "Nesingwary's Apprentice", color = "1eff00", icon = "Interface\\Icons\\INV_Jewelry_Talisman_08" },
+    { interactions = 100, name = "Master of the Hunt",      color = "0070dd", icon = "Interface\\Icons\\INV_Jewelry_Talisman_01" },
+    { interactions = 500, name = "The Hemetinator",         color = "a335ee", icon = "Interface\\Icons\\INV_Misc_Head_Dwarf_01" },
 }
 
 -- Calculate research rank for a mob
 function addon:GetMobResearchRank(mob)
-    if not mob then return 0, "Unknown", "888888", 0, 1 end
+    if not mob then return 0, "Unknown", "888888", 0, 1, nil end
     local interactions = (mob.kills or 0) + ((mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0) + ((mob.professions and mob.professions.totalHarvests) or 0)
 
     local currentRank = 0
     local rankName = "Undiscovered"
     local rankColor = "888888"
+    local rankIcon = nil
     local nextThreshold = addon.RESEARCH_RANKS[1].interactions
 
     for i, rank in ipairs(addon.RESEARCH_RANKS) do
@@ -39,6 +40,7 @@ function addon:GetMobResearchRank(mob)
             currentRank = i
             rankName = rank.name
             rankColor = rank.color
+            rankIcon = rank.icon
             if addon.RESEARCH_RANKS[i+1] then
                 nextThreshold = addon.RESEARCH_RANKS[i+1].interactions
             else
@@ -47,7 +49,7 @@ function addon:GetMobResearchRank(mob)
         end
     end
 
-    return currentRank, rankName, rankColor, interactions, nextThreshold
+    return currentRank, rankName, rankColor, interactions, nextThreshold, rankIcon
 end
 
 
