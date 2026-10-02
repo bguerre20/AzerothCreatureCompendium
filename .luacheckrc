@@ -96,7 +96,10 @@ read_globals = {
     "UnitIsFriend",
     "UnitHealth",
     "UnitHealthMax",
+    "UnitCastingInfo",
+    "UnitChannelInfo",
     "GetSubZoneText",
+    "GetMinimapZoneText",
     "GetRealZoneText",
     "GetZoneText",
 

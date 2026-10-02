@@ -126,7 +126,7 @@ end
 function addon:GetPlayerLocation()
     local mapID = C_Map.GetBestMapForUnit("player")
     if not mapID then
-        return 0, "Unknown Zone", nil
+        return 0, "Unknown Zone", nil, nil
     end
 
     local mapInfo = C_Map.GetMapInfo(mapID)
@@ -141,7 +141,16 @@ function addon:GetPlayerLocation()
         }
     end
 
-    return mapID, zoneName, coords
+    local subZone = GetSubZoneText()
+    if not subZone or subZone == "" then
+        subZone = GetMinimapZoneText()
+    end
+    subZone = self:SafeString(subZone, nil)
+    if subZone == zoneName or subZone == "" then
+        subZone = nil
+    end
+
+    return mapID, zoneName, coords, subZone
 end
 
 -- NPC ID extraction from GUID
@@ -183,13 +192,13 @@ function addon:CacheUnit(unit)
 
     -- Update database if mob exists, OR if it is a hostile/neutral rare spawn (so sightings are recorded!)
     -- This prevents friendly NPCs, vendors, and questgivers from ever being added.
-    local mapID, zoneName, coords = self:GetPlayerLocation()
+    local mapID, zoneName, coords, subZone = self:GetPlayerLocation()
     local isRare = (classification == "rare" or classification == "rareelite")
     local isNotFriend = not UnitIsFriend("player", unit)
     local mobExists = self.db and self.db.zones and self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID]
 
     if mobExists or (isRare and isNotFriend) then
-        self:UpdateUnitMeta(npcID, mapID, zoneName, name, level, classification, creatureType, coords)
+        self:UpdateUnitMeta(npcID, mapID, zoneName, name, level, classification, creatureType, coords, subZone)
     end
 end
 
@@ -378,22 +387,22 @@ function addon:ProcessLoot()
     end
 
     -- 4. Get player location and record to DB
-    local mapID, zoneName, coords = self:GetPlayerLocation()
+    local mapID, zoneName, coords, subZone = self:GetPlayerLocation()
 
     if isProfessionHarvest then
-        self:RecordProfessionLoot(mapID, zoneName, npcID, mobName, harvestProf or "Skinning", itemsLooted, coords)
+        self:RecordProfessionLoot(mapID, zoneName, npcID, mobName, harvestProf or "Skinning", itemsLooted, coords, subZone)
         addon.recentProfessionHarvest = nil
         addon.activeGatherCast = nil
     else
-        self:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords)
+        self:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords, subZone)
         if not self.killedCorpseGUIDs[sourceGUID] then
             self:MarkCorpseKilled(sourceGUID)
-            self:RecordKill(mapID, zoneName, npcID, mobName, coords)
+            self:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
         end
 
         local meta = self.unitMetaCache[npcID]
         if meta then
-            self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, meta.level, meta.classification, meta.creatureType, coords)
+            self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, meta.level, meta.classification, meta.creatureType, coords, subZone)
         end
 
         self.lastLootedMob = {
@@ -459,7 +468,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 spellID = nil
             end
             if not spellID and not addon.activeGatherCast then return end
-            
+
             local prof = addon:IdentifyGatheringSpell(spellID) or (addon.activeGatherCast and addon.activeGatherCast.profession)
             if prof then
                 local targetGUID = (addon.activeGatherCast and addon.activeGatherCast.targetGUID) or UnitGUID("target") or UnitGUID("mouseover")

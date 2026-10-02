@@ -107,11 +107,11 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | Execution Order | File | Responsibility | Primary APIs / Exports |
 | :--- | :--- | :--- | :--- |
 | **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, secret value detection/sanitization, and slash command registries. | `addon:IsSecretValue()`, `addon:SafeString()`, `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
-| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, rank calculations, secret value sanitization, on-demand deferred spell resolution, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:GetMobData()`, `addon:GetMobResearchRank()` |
+| **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, rank calculations, subzone tracking, secret value sanitization, on-demand deferred spell resolution, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:RecordSubZone()`, `addon:GetMobSubZones()`, `addon:FormatMobLocationString()`, `addon:GetMobData()`, `addon:GetMobResearchRank()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts, deferred out-of-combat spell resolution, and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `addon:ProcessPendingSpellResolutions()`, `AzerothCompendiumCombatListenerFrame` |
 | **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, coin transaction parser, and safe spell info resolver. | `addon:ResolveSpellInfo()`, `addon:GetSpellName()`, `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
 | **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`) and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
-| **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search, collapsible Zone tree (with hover tooltips for Bestiary Progression ranks), 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, Bestiary Progression Rank display, and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
+| **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search (by creature, zone, subzone, item, or spell), collapsible Zone tree (with hover tooltips for Bestiary Progression ranks), 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, Bestiary Progression Rank display, creature sub-location display ("Found in:"), and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
 | **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
 
 ### Packaging & Release Manifests
@@ -183,9 +183,9 @@ sequenceDiagram
     Combat->>Combat: Verify target is hostile creature & resolve NPC ID
     Combat->>Combat: Check (GetTime() - lastPlayerSpell.timestamp) < 3.0s
     alt Spell matches Mechanic Pattern (e.g., Taunt, Stun, Bleed)
-        Combat->>DB: RecordImmunity(mapID, zone, npcID, mobName, "TAUNT", "MECHANIC", "Taunt")
+        Combat->>DB: RecordImmunity(mapID, zone, npcID, mobName, "TAUNT", "MECHANIC", "Taunt", nil, subZone)
     else Spell matches School Pattern (e.g., Frostbolt -> Frost)
-        Combat->>DB: RecordImmunity(mapID, zone, npcID, mobName, "FROST", "SCHOOL", "Frost", 16)
+        Combat->>DB: RecordImmunity(mapID, zone, npcID, mobName, "FROST", "SCHOOL", "Frost", 16, subZone)
     end
     deactivate Combat
 
@@ -194,14 +194,14 @@ sequenceDiagram
     Client->>Combat: UNIT_SPELLCAST_START (unit, castGUID, spellID)
     Combat->>Core: ResolveSpellInfo(spellID)
     alt Spell Name Restricted by Client (Secret String)
-        Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, nil, 1, icon)
+        Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, nil, 1, icon, subZone)
         Combat->>Combat: Queue spellID in pendingSpellResolutions
         Note over Combat,Client: Player leaves combat
         Client->>Combat: PLAYER_REGEN_ENABLED
         Combat->>Combat: ProcessPendingSpellResolutions() -> resolves name & updates DB
     else Spell Name Cleanly Accessible
         Combat->>Combat: InferSpellSchool(spellName)
-        Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, spellName, school, icon)
+        Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, spellName, school, icon, subZone)
     end
 ```
 
@@ -226,10 +226,10 @@ sequenceDiagram
         Core->>Core: Extract NPC ID via GetLootSourceInfo() or mouseover GUID
         Core->>Core: Check corpse deduplication cache (lootedCorpseGUIDs)
         Core->>Core: Parse items, qualities, drop counts, and money
-        Core->>DB: RecordLoot(mapID, zone, npcID, mobName, items, money, coords)
+        Core->>DB: RecordLoot(mapID, zone, npcID, mobName, items, money, coords, subZone)
         Core->>Core: Check kill deduplication cache (killedCorpseGUIDs)
-        Core->>DB: RecordKill(mapID, zone, npcID, mobName, coords)
-        Core->>DB: UpdateUnitMeta(npcID, level, classification, creatureType)
+        Core->>DB: RecordKill(mapID, zone, npcID, mobName, coords, subZone)
+        Core->>DB: UpdateUnitMeta(npcID, mapID, zone, mobName, level, classification, creatureType, coords, subZone)
         deactivate Core
     else Scenario B: Profession Harvesting (Skinning, Mining, etc.)
         Player->>Client: Channels Skinning / Mining on mob corpse
@@ -241,7 +241,7 @@ sequenceDiagram
         activate Core
         Core->>Core: Detect active profession correlation
         Core->>Core: Check harvest deduplication cache (harvestedCorpseGUIDs)
-        Core->>DB: RecordProfessionLoot(mapID, zone, npcID, mobName, "Skinning", items, coords)
+        Core->>DB: RecordProfessionLoot(mapID, zone, npcID, mobName, "Skinning", items, coords, subZone)
         deactivate Core
     end
 ```
@@ -354,6 +354,9 @@ AzerothCreatureCompendiumDB
                         ├── firstSeen: timestamp
                         ├── lastSeen: timestamp
                         ├── coords: Array<{x: number, y: number, time: timestamp}> (Rare spawns only)
+                        ├── subZones: map<string, true> (Documented local sub-areas within parent zone)
+                        ├── zoneName: string (Parent zone name)
+                        ├── mapID: number (Blizzard UiMapID)
                         │
                         ├── combat: CombatObject (Sibling 1)
                         │     ├── attacks: { swings: n, minDmg: n, maxDmg: n, totalDmg: n, avgDmg: n, school: n }
@@ -414,6 +417,14 @@ AzerothCreatureCompendiumDB
   2. If the `spellID` returned from `UNIT_SPELLCAST_START` is a secret number, the engine gracefully attempts a fallback query to the global `UnitCastingInfo` or `UnitChannelInfo` APIs to fetch an untainted ID. If the fallback is also restricted, the event is safely dropped to guarantee zero UI crashes.
   3. If the spell name is secret during combat, it is temporarily recorded with a placeholder (`"Spell <id>"`) and queued in `addon.pendingSpellResolutions`.
   4. When combat drops (`PLAYER_REGEN_ENABLED`) or when mob data is retrieved for tooltips/browser (`GetMobData`), deferred spells are automatically resolved to their true names, icons, and inferred spell schools once client restrictions are lifted.
+
+### 8. Subzone & Local Area Discovery Policy
+- **Context:** Players want to know specific micro-areas where a creature is found (e.g. *Coldridge Pass* or *Kharanos* within *Dun Morogh*) without recording hundreds of noisy map coordinates for standard world creatures, and without cluttering the primary zone navigation tree.
+- **Decision:** The compendium dynamically records unique subzones visited during creature sightings, kills, loot, and combat interactions:
+  1. Local area text is extracted via `GetSubZoneText()` (falling back to `GetMinimapZoneText()`). If the area matches the parent zone name or is empty, it is disregarded to avoid redundant parent-zone self-references.
+  2. Each unique subzone is indexed within `mob.subZones[subZone] = true`, maintaining O(1) deduplication and negligible memory overhead.
+  3. In the Pokédex window (`CompendiumWindow.lua`), sub-locations are rendered directly underneath the creature's Research Rank (e.g. `"Found in: Coldridge Valley and Kharanos"`), utilizing Oxford-comma formatting for 3+ areas and falling back to the parent zone name when no distinct sub-areas exist.
+  4. The search filter seamlessly indexes `mob.subZones`, allowing players to filter creatures by local area names in addition to creature names, zone names, item drops, and spell abilities.
 
 ---
 

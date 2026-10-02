@@ -154,6 +154,7 @@ function addon:CreateCompendiumWindow()
                 addon:RefreshTreeList()
             elseif data.type == "MOB" then
                 addon.selectedMob = data.mob
+                addon.selectedZone = data.zone
                 addon:RefreshSelectedMobCard()
                 addon:UpdateTreeListRows()
             end
@@ -293,6 +294,12 @@ function addon:CreateCompendiumWindow()
     mobRankText:SetPoint("TOPLEFT", mobCoordsText, "BOTTOMLEFT", 0, -4)
     mobRankText:SetJustifyH("LEFT")
     self.mobRankText = mobRankText
+
+    local mobLocationText = mobCard:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    mobLocationText:SetPoint("TOPLEFT", mobRankText, "BOTTOMLEFT", 0, -4)
+    mobLocationText:SetJustifyH("LEFT")
+    mobLocationText:SetWidth(340)
+    self.mobLocationText = mobLocationText
 
     -- Model Spin Hint
     local spinHint = mobCard:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
@@ -517,7 +524,17 @@ function addon:BuildTreeList()
                     end
                 end
 
-                if mobMatches or matchSpell or matchItem then
+                local matchSubZone = false
+                if mob.subZones then
+                    for szName in pairs(mob.subZones) do
+                        if string.find(string.lower(szName), query, 1, true) then
+                            matchSubZone = true
+                            break
+                        end
+                    end
+                end
+
+                if mobMatches or matchSpell or matchItem or matchSubZone then
                     table.insert(matchingMobs, mob)
                 end
             end
@@ -549,6 +566,7 @@ function addon:BuildTreeList()
                         id = mob.npcID,
                         name = mob.name,
                         mob = mob,
+                        zone = zone,
                     })
                 end
             end
@@ -566,6 +584,7 @@ function addon:BuildTreeList()
         for _, entry in ipairs(list) do
             if entry.type == "MOB" then
                 self.selectedMob = entry.mob
+                self.selectedZone = entry.zone
                 break
             end
         end
@@ -741,6 +760,21 @@ function addon:RefreshSelectedMobCard()
             self.mobRankText:SetPoint("TOPLEFT", self.mobCoordsText, "BOTTOMLEFT", 0, -4)
         else
             self.mobRankText:SetPoint("TOPLEFT", self.mobStatsText, "BOTTOMLEFT", 0, -4)
+        end
+    end
+
+    -- Subzone / Local Area Line under Research Rank
+    if self.mobLocationText then
+        self.mobLocationText:ClearAllPoints()
+        self.mobLocationText:SetPoint("TOPLEFT", self.mobRankText, "BOTTOMLEFT", 0, -4)
+
+        local zoneName = (self.selectedZone and self.selectedZone.name) or mob.zoneName
+        local locStr = addon:FormatMobLocationString(mob, zoneName)
+        if locStr and locStr ~= "" then
+            self.mobLocationText:SetText(string.format("|cffe0e0e0Found in:|r |cffffffff%s|r", locStr))
+            self.mobLocationText:Show()
+        else
+            self.mobLocationText:Hide()
         end
     end
 

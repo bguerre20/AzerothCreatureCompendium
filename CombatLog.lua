@@ -145,11 +145,11 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
 
             if npcID and spellID then
                 local mobName = addon:SafeString(UnitName(unit), "Creature " .. npcID)
-                local mapID, zoneName, _ = addon:GetPlayerLocation()
+                local mapID, zoneName, _, subZone = addon:GetPlayerLocation()
 
                 local spellName, spellTexture
                 local schoolNum = 1
-                
+
                 if spellID == -1 then
                     spellName = "Unknown (Protected Ability)"
                     spellTexture = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -165,7 +165,7 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
                     end
                 end
 
-                addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellID, spellName, schoolNum, spellTexture)
+                addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellID, spellName, schoolNum, spellTexture, subZone)
             end
         end
 
@@ -206,7 +206,7 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
                 local npcID = addon:GetNPCIDFromGUID(guid)
                 if npcID then
                     local mobName = addon:SafeString(UnitName("target"), "Creature " .. npcID)
-                    local mapID, zoneName, _ = addon:GetPlayerLocation()
+                    local mapID, zoneName, _, subZone = addon:GetPlayerLocation()
 
                     -- Check what spell player recently cast
                     local last = addon.lastPlayerSpell
@@ -214,13 +214,13 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
                         -- Check mechanic immunity
                         local mKey, mName = MatchMechanicByName(last.name)
                         if mKey then
-                            addon:RecordImmunity(mapID, zoneName, npcID, mobName, mKey, "MECHANIC", mName)
+                            addon:RecordImmunity(mapID, zoneName, npcID, mobName, mKey, "MECHANIC", mName, nil, subZone)
                         end
 
                         -- Check school immunity
                         local sNum, sKey, sName = InferSpellSchool(last.name)
                         if sKey and sKey ~= "PHYSICAL" then
-                            addon:RecordImmunity(mapID, zoneName, npcID, mobName, sKey, "SCHOOL", sName, sNum)
+                            addon:RecordImmunity(mapID, zoneName, npcID, mobName, sKey, "SCHOOL", sName, sNum, subZone)
                         end
                     end
                 end
@@ -236,9 +236,9 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
             local npcID = addon:GetNPCIDFromGUID(guid)
             if npcID and not addon.killedCorpseGUIDs[guid] then
                 local mobName = addon:SafeString(UnitName("target"), "Creature " .. npcID)
-                local mapID, zoneName, coords = addon:GetPlayerLocation()
+                local mapID, zoneName, coords, subZone = addon:GetPlayerLocation()
                 addon:MarkCorpseKilled(guid)
-                addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
+                addon:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
             end
         end
 

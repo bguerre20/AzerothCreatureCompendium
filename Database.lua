@@ -192,6 +192,15 @@ function addon:InitDatabase()
         zone.name = self:SafeString(zone.name, "Zone " .. mapID)
         for npcID, mob in pairs(zone.mobs or {}) do
             mob.name = self:SafeString(mob.name, "Creature " .. npcID)
+            if not mob.subZones then
+                mob.subZones = {}
+            end
+            if not mob.zoneName then
+                mob.zoneName = zone.name
+            end
+            if not mob.mapID then
+                mob.mapID = mapID
+            end
             if mob.combat and mob.combat.spells then
                 for spellID, sp in pairs(mob.combat.spells) do
                     sp.name = self:SafeString(sp.name, "Spell " .. spellID)
@@ -207,7 +216,7 @@ function addon:InitDatabase()
 end
 
 -- Core factory: ensures Zone and Mob exist with the new Pokédex structure
-function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not npcID or npcID <= 0 then return nil end
     if not self.db then self:InitDatabase() end
     mapID = mapID or 0
@@ -246,6 +255,9 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
             firstSeen = time(),
             lastSeen = time(),
             coords = {},
+            subZones = {},
+            zoneName = zone.name,
+            mapID = mapID,
             -- Sibling Child 1: Combat
             combat = {
                 attacks = {
@@ -285,6 +297,15 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
     end
 
     -- Structure guarantee
+    if not mob.subZones then
+        mob.subZones = {}
+    end
+    if not mob.zoneName then
+        mob.zoneName = zone.name
+    end
+    if not mob.mapID then
+        mob.mapID = mapID
+    end
     if not mob.combat then
         mob.combat = {
             attacks = { swings = 0, minDmg = 0, maxDmg = 0, totalDmg = 0, avgDmg = 0, school = 1 },
@@ -311,6 +332,10 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName)
         }
     end
 
+    if subZone then
+        self:RecordSubZone(mob, subZone)
+    end
+
     -- Backward compatibility mirrors
     mob.totalLoots = mob.loot.totalLoots
     mob.avgMoney = mob.loot.avgMoney
@@ -331,11 +356,62 @@ function addon:RecordCoordinates(mob, coords)
     end
 end
 
+-- Helper to record creature sighting in a local subzone
+function addon:RecordSubZone(mob, subZone)
+    if not mob or not subZone or type(subZone) ~= "string" or subZone == "" then return end
+    subZone = self:SafeString(subZone, nil)
+    if not subZone or subZone == "" then return end
+
+    if not mob.subZones then
+        mob.subZones = {}
+    end
+
+    mob.subZones[subZone] = true
+end
+
+-- Returns sorted list of subzone names
+function addon:GetMobSubZones(mob)
+    if not mob or not mob.subZones then return {} end
+    local list = {}
+    if type(mob.subZones) == "table" then
+        for k, v in pairs(mob.subZones) do
+            if type(k) == "string" and v then
+                table.insert(list, k)
+            elseif type(v) == "string" then
+                table.insert(list, v)
+            end
+        end
+    end
+    table.sort(list)
+    return list
+end
+
+-- Formats creature location string (e.g. "Coldridge Pass", "Coldridge Valley and Kharanos", or fallback to zone name)
+function addon:FormatMobLocationString(mob, defaultZoneName)
+    local subZones = self:GetMobSubZones(mob)
+    local count = #subZones
+
+    if count == 1 then
+        return subZones[1]
+    elseif count == 2 then
+        return string.format("%s and %s", subZones[1], subZones[2])
+    elseif count > 2 then
+        local allButLast = table.concat(subZones, ", ", 1, count - 1)
+        return string.format("%s, and %s", allButLast, subZones[count])
+    end
+
+    if defaultZoneName and defaultZoneName ~= "" and defaultZoneName ~= "Unknown Zone" then
+        return defaultZoneName
+    end
+
+    return nil
+end
+
 -- Update creature metadata from unit inspection (target, mouseover, nameplates)
-function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType, coords)
+function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType, coords, subZone)
     classification = self:SafeString(classification, nil)
     creatureType = self:SafeString(creatureType, nil)
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
     if classification and classification ~= "" then
@@ -361,8 +437,8 @@ function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classifica
 end
 
 -- Records a loot encounter for a mob in a zone
-function addon:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords)
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+function addon:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords, subZone)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
     itemsLooted = itemsLooted or {}
@@ -447,8 +523,8 @@ function addon:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCop
 end
 
 -- Records a profession harvest (skinning, mining, herbalism, engineering) for a mob
-function addon:RecordProfessionLoot(mapID, zoneName, npcID, mobName, professionName, itemsLooted, coords)
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+function addon:RecordProfessionLoot(mapID, zoneName, npcID, mobName, professionName, itemsLooted, coords, subZone)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
     professionName = professionName or "Skinning"
@@ -543,8 +619,8 @@ function addon:RecordProfessionLoot(mapID, zoneName, npcID, mobName, professionN
 end
 
 -- Records Melee / Auto-Attacks performed by creature
-function addon:RecordMeleeAttack(mapID, zoneName, npcID, mobName, amount, school)
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+function addon:RecordMeleeAttack(mapID, zoneName, npcID, mobName, amount, school, subZone)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
     local atk = mob.combat.attacks
@@ -566,7 +642,7 @@ function addon:RecordMeleeAttack(mapID, zoneName, npcID, mobName, amount, school
 end
 
 -- Records a spell cast by creature
-function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon, subZone)
     if not spellId then return end
     spellId = tonumber(spellId)
     if not spellId then return end
@@ -575,7 +651,7 @@ function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellNa
     mobName = self:SafeString(mobName, "Creature " .. npcID)
     spellName = self:SafeString(spellName, nil)
 
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
     local spell = mob.combat.spells[spellId]
@@ -604,7 +680,7 @@ function addon:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellNa
 end
 
 -- Records spell damage dealt by creature
-function addon:RecordSpellDamage(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, overkill, isPeriodic, icon)
+function addon:RecordSpellDamage(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, overkill, isPeriodic, icon, subZone)
     if not spellId then return end
     spellId = tonumber(spellId)
     if not spellId then return end
@@ -613,10 +689,10 @@ function addon:RecordSpellDamage(mapID, zoneName, npcID, mobName, spellId, spell
     mobName = self:SafeString(mobName, "Creature " .. npcID)
     spellName = self:SafeString(spellName, nil)
 
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
-    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon, subZone)
     local spell = mob.combat.spells[spellId]
     if not spell then return end
 
@@ -636,7 +712,7 @@ function addon:RecordSpellDamage(mapID, zoneName, npcID, mobName, spellId, spell
 end
 
 -- Records spell healing done by creature
-function addon:RecordSpellHeal(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, icon)
+function addon:RecordSpellHeal(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, amount, icon, subZone)
     if not spellId then return end
     spellId = tonumber(spellId)
     if not spellId then return end
@@ -645,10 +721,10 @@ function addon:RecordSpellHeal(mapID, zoneName, npcID, mobName, spellId, spellNa
     mobName = self:SafeString(mobName, "Creature " .. npcID)
     spellName = self:SafeString(spellName, nil)
 
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
-    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon, subZone)
     local spell = mob.combat.spells[spellId]
     if not spell then return end
 
@@ -669,7 +745,7 @@ function addon:RecordSpellHeal(mapID, zoneName, npcID, mobName, spellId, spellNa
 end
 
 -- Records aura application by creature
-function addon:RecordSpellAura(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, auraType, icon)
+function addon:RecordSpellAura(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, auraType, icon, subZone)
     if not spellId then return end
     spellId = tonumber(spellId)
     if not spellId then return end
@@ -678,10 +754,10 @@ function addon:RecordSpellAura(mapID, zoneName, npcID, mobName, spellId, spellNa
     mobName = self:SafeString(mobName, "Creature " .. npcID)
     spellName = self:SafeString(spellName, nil)
 
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
-    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon)
+    self:RecordSpellCast(mapID, zoneName, npcID, mobName, spellId, spellName, spellSchool, icon, subZone)
     local spell = mob.combat.spells[spellId]
     if not spell then return end
 
@@ -693,14 +769,14 @@ function addon:RecordSpellAura(mapID, zoneName, npcID, mobName, spellId, spellNa
 end
 
 -- Records an observed immunity on a creature
-function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immunityType, immunityName, school)
+function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immunityType, immunityName, school, subZone)
     immunityKey = self:SafeString(immunityKey, nil)
     if not immunityKey or immunityKey == "" then return end
     zoneName = self:SafeString(zoneName, "Unknown Zone")
     mobName = self:SafeString(mobName, "Creature " .. npcID)
     immunityName = self:SafeString(immunityName, immunityKey)
 
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
     local imm = mob.combat.immunities[immunityKey]
@@ -722,8 +798,8 @@ function addon:RecordImmunity(mapID, zoneName, npcID, mobName, immunityKey, immu
 end
 
 -- Records a kill
-function addon:RecordKill(mapID, zoneName, npcID, mobName, coords)
-    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName)
+function addon:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
+    local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
     mob.kills = (mob.kills or 0) + 1
     if coords and coords.x and coords.y then

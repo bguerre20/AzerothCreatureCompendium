@@ -1,5 +1,11 @@
 # Azeroth Creature Compendium
 
+## v0.9.8-beta (2026-10-02)
+- **Creature Subzone Tracking:** The compendium now records the specific local areas and subzones where each creature is sighted (e.g. *Coldridge Pass* or *Kharanos* within *Dun Morogh*).
+- **Sub-Location Compendium Display:** A new "Found in:" entry on each creature's Pokédex card displays all unique subzones where you've encountered that mob (e.g. *"Found in: Coldridge Valley and Kharanos"*).
+- **Subzone Search Filtering:** The Compendium search bar now matches local subzone names, allowing you to instantly find all creatures documented in a specific pass, camp, valley, or town.
+- **Dynamic Location Formatting:** Displays natural English phrasing for single or multiple locations, with automatic fallback to the parent zone when roaming open wilderness.
+
 ## v0.9.7-beta (2026-10-02)
 - **Combat Ability & Spellcast Fix:** Fixed Lua errors ("attempt to perform string conversion on a secret string value" and "attempted to perform indexed assignment on a table that cannot be indexed with secret keys") when nearby hostile creatures cast spells in the player's presence.
 - **Modern Client Compatibility:** Added automatic safeguards for restricted combat strings and secret payload numbers introduced in recent game engine updates (11.0.0+), ensuring spells cast during combat are safely captured via global API fallbacks.
