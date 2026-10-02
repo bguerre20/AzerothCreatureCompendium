@@ -159,6 +159,36 @@ function addon:CreateCompendiumWindow()
             end
         end)
 
+        row:SetScript("OnEnter", function(btn)
+            local data = btn.data
+            if data and data.type == "ZONE" and data.rankCounts then
+                GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+                GameTooltip:SetText(data.name, 1, 0.82, 0)
+                GameTooltip:AddLine(string.format("%d Species Documented", data.count), 1, 1, 1)
+
+                local r4 = data.rankCounts[4] or 0
+                local r3 = data.rankCounts[3] or 0
+                local r2 = data.rankCounts[2] or 0
+                local r1 = data.rankCounts[1] or 0
+
+                local details = {}
+                if r4 > 0 then table.insert(details, string.format("|cffa335ee%d Hemetinator|r", r4)) end
+                if r3 > 0 then table.insert(details, string.format("|cff0070dd%d Master|r", r3)) end
+                if r2 > 0 then table.insert(details, string.format("|cff1eff00%d Apprentice|r", r2)) end
+                if r1 > 0 then table.insert(details, string.format("|cffe0e0e0%d Greenhorn|r", r1)) end
+
+                if #details > 0 then
+                    GameTooltip:AddLine(table.concat(details, "  ·  "), 1, 1, 1)
+                end
+
+                GameTooltip:Show()
+            end
+        end)
+
+        row:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+
         self.leftRows[i] = row
     end
 
@@ -258,6 +288,11 @@ function addon:CreateCompendiumWindow()
     mobCoordsText:SetPoint("TOPLEFT", mobStatsText, "BOTTOMLEFT", 0, -4)
     mobCoordsText:SetJustifyH("LEFT")
     self.mobCoordsText = mobCoordsText
+
+    local mobRankText = mobCard:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    mobRankText:SetPoint("TOPLEFT", mobCoordsText, "BOTTOMLEFT", 0, -4)
+    mobRankText:SetJustifyH("LEFT")
+    self.mobRankText = mobRankText
 
     -- Model Spin Hint
     local spinHint = mobCard:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
@@ -492,12 +527,19 @@ function addon:BuildTreeList()
             local isZoneExp = self.zoneExpanded[zone.id]
             if query ~= "" then isZoneExp = true end
 
+            local rankCounts = { [0] = 0, [1] = 0, [2] = 0, [3] = 0, [4] = 0 }
+            for _, mob in ipairs(matchingMobs) do
+                local rIndex = addon:GetMobResearchRank(mob)
+                rankCounts[rIndex] = rankCounts[rIndex] + 1
+            end
+
             table.insert(list, {
                 type = "ZONE",
                 id = zone.id,
                 name = zone.name,
                 count = #matchingMobs,
-                expanded = isZoneExp
+                expanded = isZoneExp,
+                rankCounts = rankCounts
             })
 
             if isZoneExp then
@@ -681,6 +723,24 @@ function addon:RefreshSelectedMobCard()
             self.mobCoordsText:Show()
         else
             self.mobCoordsText:Hide()
+        end
+    end
+
+    if self.mobRankText then
+        local _, rankName, rankColor, interactions, nextThreshold = addon:GetMobResearchRank(mob)
+        local progressStr
+        if nextThreshold > 0 then
+            progressStr = string.format(" |cff888888(%d/%d to next rank)|r", interactions, nextThreshold)
+        else
+            progressStr = " |cff888888(Max Rank)|r"
+        end
+        self.mobRankText:SetText(string.format("Research Rank: |cff%s%s|r%s", rankColor, rankName, progressStr))
+
+        self.mobRankText:ClearAllPoints()
+        if self.mobCoordsText and self.mobCoordsText:IsShown() then
+            self.mobRankText:SetPoint("TOPLEFT", self.mobCoordsText, "BOTTOMLEFT", 0, -4)
+        else
+            self.mobRankText:SetPoint("TOPLEFT", self.mobStatsText, "BOTTOMLEFT", 0, -4)
         end
     end
 

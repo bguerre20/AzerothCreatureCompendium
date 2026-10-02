@@ -16,6 +16,41 @@ function addon:FormatQualityName(name, quality)
     return string.format("|cff%s%s|r", hex, name or "Unknown Item")
 end
 
+-- Bestiary Progression Ranks
+addon.RESEARCH_RANKS = {
+    { interactions = 1,   name = "Safari Greenhorn", color = "e0e0e0" },
+    { interactions = 35,  name = "Nesingwary's Apprentice", color = "1eff00" },
+    { interactions = 100, name = "Master of the Hunt", color = "0070dd" },
+    { interactions = 500, name = "The Hemetinator", color = "a335ee" },
+}
+
+-- Calculate research rank for a mob
+function addon:GetMobResearchRank(mob)
+    if not mob then return 0, "Unknown", "888888", 0, 1 end
+    local interactions = (mob.kills or 0) + ((mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0) + ((mob.professions and mob.professions.totalHarvests) or 0)
+
+    local currentRank = 0
+    local rankName = "Undiscovered"
+    local rankColor = "888888"
+    local nextThreshold = addon.RESEARCH_RANKS[1].interactions
+
+    for i, rank in ipairs(addon.RESEARCH_RANKS) do
+        if interactions >= rank.interactions then
+            currentRank = i
+            rankName = rank.name
+            rankColor = rank.color
+            if addon.RESEARCH_RANKS[i+1] then
+                nextThreshold = addon.RESEARCH_RANKS[i+1].interactions
+            else
+                nextThreshold = -1 -- Max rank
+            end
+        end
+    end
+
+    return currentRank, rankName, rankColor, interactions, nextThreshold
+end
+
+
 -- Initialize and migrate database
 function addon:InitDatabase()
     -- Initialize primary SavedVariable

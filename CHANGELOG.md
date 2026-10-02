@@ -1,5 +1,10 @@
 # Azeroth Creature Compendium
 
+## v0.9.6-beta (2026-10-02)
+- **Bestiary Progression Ranks:** Mobs will now level up in rank as you interact with them (kills, loots, and harvests). Track your progression from *Safari Greenhorn* all the way up to *The Hemetinator* directly on the creature's Pokédex card.
+- **Zone Progression Tooltips:** Hover over a zone in the Compendium registry list to see a full breakdown of the species documented and ranks mastered in that area.
+- **Simplified Tooltip Headers:** Streamlined tooltip section headers to *Compendium - Loot*, *Compendium - Combat*, and *Compendium - Professions*, removing redundant creature name repetitions across both embedded and sidecar views.
+
 ## v0.9.5-beta (2026-10-02)
 - **Accurate Mob Kill Tracking:** Fixed an issue where looting a mob corpse would record a duplicate kill count. Mob kills are now reliably counted once per unique corpse.
 - **Slash Commands Restored:** Fixed an issue preventing `/acc`, `/compendium`, and related slash commands from functioning.

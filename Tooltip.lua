@@ -358,11 +358,11 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
     if PrepareSidecar(lootTooltip, showLoot) then
         if mob then
             local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
-            lootTooltip:AddLine(string.format("|cff00ff96%s Drops|r |cff888888(%d loots)|r", mob.name or "Mob", lootsCount))
+            lootTooltip:AddLine(string.format("|cff00ff96Compendium - Loot|r |cff888888(%d loots)|r", lootsCount))
             lootTooltip:AddLine(" ")
             self:PopulateLootContent(lootTooltip, mob)
         else
-            lootTooltip:AddLine(string.format("|cff00ff96%s Drops|r", unrecordedName or "Creature"))
+            lootTooltip:AddLine("|cff00ff96Compendium - Loot|r")
             lootTooltip:AddLine(" ")
             lootTooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
             lootTooltip:AddLine("  |cff888888Defeat and loot to record item drops.|r")
@@ -374,11 +374,10 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
 
     -- 2. Setup Combat Tooltip
     if PrepareSidecar(combatTooltip, showCombat) then
+        combatTooltip:AddLine("|cffe5c158Compendium - Combat|r")
         if mob then
-            combatTooltip:AddLine(string.format("|cffe5c158%s - Combat Profile|r", mob.name or "Mob"))
             self:PopulateCombatContent(combatTooltip, mob)
         else
-            combatTooltip:AddLine(string.format("|cffe5c158%s - Combat Profile|r", unrecordedName or "Creature"))
             combatTooltip:AddLine(" ")
             combatTooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
             combatTooltip:AddLine("  |cff888888Engage in combat to discover attacks, spells, and immunities.|r")
@@ -392,11 +391,11 @@ function addon:UpdateCompanionTooltips(mob, unrecordedName)
     if PrepareSidecar(professionTooltip, showProf) then
         if mob then
             local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
-            professionTooltip:AddLine(string.format("|cffc7a16b%s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or "Mob", harvestsCount))
+            professionTooltip:AddLine(string.format("|cffc7a16bCompendium - Professions|r |cff888888(%d harvests)|r", harvestsCount))
             professionTooltip:AddLine(" ")
             self:PopulateProfessionContent(professionTooltip, mob)
         else
-            professionTooltip:AddLine(string.format("|cffc7a16b%s - Profession Loot|r", unrecordedName or "Creature"))
+            professionTooltip:AddLine("|cffc7a16bCompendium - Professions|r")
             professionTooltip:AddLine(" ")
             professionTooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
             professionTooltip:AddLine("  |cff888888Gather or skin this creature to discover profession loot.|r")
@@ -527,19 +526,19 @@ function addon:OnTooltipSetUnit(tooltip, data)
 
             if showLoot then
                 tooltip:AddLine(" ")
-                tooltip:AddLine(string.format("|cff00ff96[Compendium] %s Drops|r", unitName))
+                tooltip:AddLine("|cff00ff96Compendium - Loot|r")
                 tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
                 tooltip:AddLine("  |cff888888Defeat and loot to record item drops.|r")
             end
             if showCombat then
                 tooltip:AddLine(" ")
-                tooltip:AddLine(string.format("|cffe5c158[Compendium] %s - Combat Profile|r", unitName))
+                tooltip:AddLine("|cffe5c158Compendium - Combat|r")
                 tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
                 tooltip:AddLine("  |cff888888Engage in combat to discover attacks, spells, and immunities.|r")
             end
             if showProf then
                 tooltip:AddLine(" ")
-                tooltip:AddLine(string.format("|cffc7a16b[Compendium] %s - Profession Loot|r", unitName))
+                tooltip:AddLine("|cffc7a16bCompendium - Professions|r")
                 tooltip:AddLine("  |cff888888You have not encountered this creature yet.|r")
                 tooltip:AddLine("  |cff888888Gather or skin this creature to discover profession loot.|r")
             end
@@ -562,18 +561,18 @@ function addon:OnTooltipSetUnit(tooltip, data)
         if showLoot then
             tooltip:AddLine(" ")
             local lootsCount = (mob.loot and mob.loot.totalLoots) or mob.totalLoots or 0
-            tooltip:AddLine(string.format("|cff00ff96[Compendium] %s Drops|r |cff888888(%d loots)|r", mob.name or unitName, lootsCount))
+            tooltip:AddLine(string.format("|cff00ff96Compendium - Loot|r |cff888888(%d loots)|r", lootsCount))
             self:PopulateLootContent(tooltip, mob)
         end
         if showCombat then
             tooltip:AddLine(" ")
-            tooltip:AddLine(string.format("|cffe5c158[Compendium] %s - Combat Profile|r", mob.name or unitName))
+            tooltip:AddLine("|cffe5c158Compendium - Combat|r")
             self:PopulateCombatContent(tooltip, mob)
         end
         if showProf then
             tooltip:AddLine(" ")
             local harvestsCount = (mob.professions and mob.professions.totalHarvests) or 0
-            tooltip:AddLine(string.format("|cffc7a16b[Compendium] %s - Profession Loot|r |cff888888(%d harvests)|r", mob.name or unitName, harvestsCount))
+            tooltip:AddLine(string.format("|cffc7a16bCompendium - Professions|r |cff888888(%d harvests)|r", harvestsCount))
             self:PopulateProfessionContent(tooltip, mob)
         end
 
