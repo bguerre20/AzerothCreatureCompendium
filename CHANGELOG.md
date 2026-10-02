@@ -1,5 +1,11 @@
 # Azeroth Creature Compendium
 
+## v0.9.5-beta (2026-10-02)
+- **Accurate Mob Kill Tracking:** Fixed an issue where looting a mob corpse would record a duplicate kill count. Mob kills are now reliably counted once per unique corpse.
+- **Slash Commands Restored:** Fixed an issue preventing `/acc`, `/compendium`, and related slash commands from functioning.
+- **Harvest Statistics Fix:** Fixed a bug where running `/acc status` multiple times would continuously inflate the total harvest count in the chat output.
+- **Performance & Cleanup:** Optimized internal variable handling and UI drag handlers for reduced memory overhead.
+
 ## v0.9.4-beta (2026-10-01)
 - **Settings UI Polish:** Reduced button text font size and optimized button padding in the Options panel so labels like `[ALWAYS]` fit cleanly without clipping.
 - **Mouse Cursor Tooltip Anchoring:** Added an option to anchor creature tooltips directly at your mouse cursor or keep them attached to Blizzard's main tooltip.
