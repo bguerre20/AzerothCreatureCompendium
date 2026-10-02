@@ -7,7 +7,7 @@
     - Draggable Minimap Button with dynamic HUD scaling.
 ]]
 
-local ADDON_NAME, addon = ...
+local _, addon = ...
 
 -- State tracking
 addon.zoneExpanded = {}
@@ -217,7 +217,8 @@ function addon:CreateCompendiumWindow()
     model:SetScript("OnMouseDown", function(selfModel, button)
         if button == "LeftButton" then
             selfModel.isDragging = true
-            selfModel.startX, _ = GetCursorPosition()
+            local startX, _ = GetCursorPosition()
+            selfModel.startX = startX
             selfModel.startFacing = selfModel:GetFacing() or 0
         end
     end)

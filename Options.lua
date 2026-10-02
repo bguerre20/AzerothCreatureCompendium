@@ -4,7 +4,7 @@
     Taint-free implementation with native toggle buttons and zero DropDownList taint.
 ]]
 
-local ADDON_NAME, addon = ...
+local _, addon = ...
 
 local panel = CreateFrame("Frame", "AzerothCompendiumOptionsPanel", UIParent)
 panel.name = "Creature Compendium"

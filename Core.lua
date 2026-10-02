@@ -12,6 +12,8 @@ addon.lootedCorpseGUIDs = {}
 addon.corpseHistoryList = {}
 addon.harvestedCorpseGUIDs = {}
 addon.harvestHistoryList = {}
+addon.killedCorpseGUIDs = {}
+addon.killHistoryList = {}
 addon.activeGatherCast = nil
 addon.recentProfessionHarvest = nil
 addon.isProcessingLoot = false
@@ -197,6 +199,21 @@ function addon:MarkCorpseLooted(guid)
     end
 end
 
+function addon:MarkCorpseKilled(guid)
+    if not guid then return end
+    if self.killedCorpseGUIDs[guid] then return end
+
+    self.killedCorpseGUIDs[guid] = true
+    table.insert(self.killHistoryList, guid)
+
+    if #self.killHistoryList > 400 then
+        local oldest = table.remove(self.killHistoryList, 1)
+        if oldest then
+            self.killedCorpseGUIDs[oldest] = nil
+        end
+    end
+end
+
 -- Mark corpse as harvested to prevent double-counting if harvest window is re-opened
 function addon:MarkCorpseHarvested(guid)
     if not guid then return end
@@ -317,7 +334,7 @@ function addon:ProcessLoot()
                 moneyCopper = moneyCopper + quantity
             end
         elseif slotType == LOOT_ITEM or slotType == 0 then
-            local icon, name, quantity, currencyID, quality = GetLootSlotInfo(slot)
+            local icon, name, quantity, _, quality = GetLootSlotInfo(slot)
             local itemLink = GetLootSlotLink(slot)
             local itemID = nil
 
@@ -349,7 +366,10 @@ function addon:ProcessLoot()
         addon.activeGatherCast = nil
     else
         self:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords)
-        self:RecordKill(mapID, zoneName, npcID, mobName, coords)
+        if not self.killedCorpseGUIDs[sourceGUID] then
+            self:MarkCorpseKilled(sourceGUID)
+            self:RecordKill(mapID, zoneName, npcID, mobName, coords)
+        end
 
         local meta = self.unitMetaCache[npcID]
         if meta then

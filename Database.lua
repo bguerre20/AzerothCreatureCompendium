@@ -4,7 +4,7 @@
     calculations, auto-migration, and queries.
 ]]
 
-local ADDON_NAME, addon = ...
+local _, addon = ...
 
 -- Quality formatting helpers
 function addon:GetQualityHex(quality)
@@ -838,6 +838,7 @@ function addon:PrintStatus()
     local totalItems = 0
     local totalSpells = 0
     local totalImmunities = 0
+    local totalHarvests = 0
     local seenItems = {}
 
     for _, zone in pairs(self.db.zones or {}) do

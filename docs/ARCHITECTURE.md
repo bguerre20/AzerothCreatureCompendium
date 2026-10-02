@@ -214,6 +214,7 @@ sequenceDiagram
         Core->>Core: Check corpse deduplication cache (lootedCorpseGUIDs)
         Core->>Core: Parse items, qualities, drop counts, and money
         Core->>DB: RecordLoot(mapID, zone, npcID, mobName, items, money, coords)
+        Core->>Core: Check kill deduplication cache (killedCorpseGUIDs)
         Core->>DB: RecordKill(mapID, zone, npcID, mobName, coords)
         Core->>DB: UpdateUnitMeta(npcID, level, classification, creatureType)
         deactivate Core

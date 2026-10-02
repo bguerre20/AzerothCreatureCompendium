@@ -6,7 +6,7 @@
     Real-time modifier key detection and intelligent multi-panel positioning.
 ]]
 
-local ADDON_NAME, addon = ...
+local _, addon = ...
 
 -- Formatted coin display helper
 function addon:FormatCoinString(copper)
