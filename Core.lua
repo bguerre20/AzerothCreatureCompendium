@@ -156,7 +156,7 @@ end
 -- NPC ID extraction from GUID
 -- Format: Creature-0-xxxx-xxxx-xxxx-NPCID-SPAWNUID
 function addon:GetNPCIDFromGUID(guid)
-    if not guid or type(guid) ~= "string" then return nil end
+    if not guid or type(guid) ~= "string" or self:IsSecretValue(guid) then return nil end
     local unitType, _, _, _, _, npcID = strsplit("-", guid)
     if unitType == "Creature" or unitType == "Vehicle" then
         return tonumber(npcID)

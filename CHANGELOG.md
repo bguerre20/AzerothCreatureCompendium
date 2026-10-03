@@ -1,5 +1,8 @@
 # Azeroth Creature Compendium
 
+## v0.10.2-beta (2026-10-03)
+- **Protected Nameplate Fix:** Fixed a Lua error ("attempt to perform string conversion on a secret string value") that occurred when zoning into instances. The addon now safely handles secret GUIDs from protected nameplates (like in Ragefire Chasm) without crashing or tainting execution.
+
 ## v0.10.1-beta (2026-10-02)
 - **Bestiary Progression Badges & Medals:** Added classic World of Warcraft medallion and portrait iconography to the creature research rank system. View bronze, silver, gold medallions, and the Hemet Nesingwary dwarf hunter badge directly on each creature's Pokédex card and inside zone mastery tooltips.
 - **Release Channel Synchronization:** Addon updates now automatically publish package releases to both CurseForge and GitHub Releases.
