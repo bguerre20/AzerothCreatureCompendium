@@ -1,5 +1,9 @@
 # Azeroth Creature Compendium
 
+## v0.10.3-beta (2026-10-14)
+- Added a setting in the Options panel and `/acc newmob` slash command to hide tooltip info on unrecorded creatures.
+- Fixed creature tooltips so friendly NPCs, unattackable NPCs, pets, and critters are ignored.
+
 ## v0.10.2-beta (2026-10-03)
 - Fixed a Lua error when zoning into dungeons caused by restricted nameplate identifiers.
 
