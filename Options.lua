@@ -376,9 +376,13 @@ local function InitializeOptions()
     end
     minimapCheck:SetScript("OnClick", function(self)
         local val = self:GetChecked()
-        addon.db.settings.showMinimap = val
-        if addon.minimapButton then
-            if val then addon.minimapButton:Show() else addon.minimapButton:Hide() end
+        if addon.SetMinimapButtonShown then
+            addon:SetMinimapButtonShown(val)
+        else
+            addon.db.settings.showMinimap = val
+            if addon.minimapButton then
+                if val then addon.minimapButton:Show() else addon.minimapButton:Hide() end
+            end
         end
     end)
 

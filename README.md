@@ -50,6 +50,7 @@
 - **Left-Click:** Open the Compendium window.
 - **Right-Click:** Open Addon Settings.
 - **Left-Drag:** Reposition around the minimap border.
+- **Addon Compatibility:** Works with minimap button managers, square minimaps, and LibDataBroker display bars (such as Leatrix Plus and MinimapButtonBag).
 
 ---
 
