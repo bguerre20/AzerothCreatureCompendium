@@ -81,17 +81,23 @@ Before declaring any task complete or submitting a pull request, you **MUST** ru
 
 ---
 
-## 📝 User-Facing Changelogs & CurseForge Release Standards
+## 📝 User-Facing Documentation, Changelogs & CurseForge Standards
 
-**All release notes, CurseForge changelogs, and addon update descriptions must be written strictly for players and end-users.**
+**All public player documentation (`README.md`, `CHANGELOG.md`, `.toc` Notes, and CurseForge descriptions) must read like a concise, natural human developer wrote them for fellow players.**
 
-1. **Player-Centric Summaries Only:** Focus solely on what is new, what changed, or what bug was fixed from a player's in-game perspective (e.g. *"Added option to embed creature data directly inside the default Blizzard tooltip"*, *"Added Always and Never activation modes for loot, combat, and profession tooltips"*, *"Added vertical sidecar docking (Above / Below)"*).
-2. **Zero Internal Repository Metadata:** Never include internal GitHub repository details in public changelogs:
+1. **Natural Human Tone (Zero "AI Slop"):**
+   - ❌ **NO decorative emojis** in headings or bullet points in `README.md`, `CHANGELOG.md`, or CurseForge copy.
+   - ❌ **NO em dashes (`—`)** or exclamation marks (`!`). Use simple punctuation (commas, periods, parentheses).
+   - ❌ **NO marketing fluff or buzzwords** (avoid phrases like *"dynamically observes, catalogs, and indexes"*, *"seamless"*, *"intuitive, scalable"*, *"authentic golden styling"*).
+   - ❌ **NO bold marketing lead-ins on `CHANGELOG.md` bullets.** Start changelog bullets directly with a clear verb (`Added ...`, `Fixed ...`, `Simplified ...`) rather than `- **Feature Name:** Verbose explanation...`.
+   - ❌ **NO raw Lua error strings** (e.g., `"attempt to perform string conversion..."`) in `CHANGELOG.md`. Describe the fix in plain English from a player's perspective.
+   - Keep `README.md` focused on player features and slash commands; keep Mermaid diagrams and ASCII data trees strictly in `docs/ARCHITECTURE.md`.
+2. **Player-Centric Summaries Only:** Focus solely on what is new, what changed, or what bug was fixed from a player's in-game perspective (e.g., *"Added an Embedded tooltip mode to show creature data directly inside Blizzard's default tooltip"*, *"Fixed a bug where looting a corpse counted as an extra kill"*).
+3. **Zero Internal Repository Metadata:** Never include internal GitHub repository details in public changelogs:
    - ❌ **NO issue numbers or closure syntax** (e.g., `Closes #22`, `Fixes #14`, `#8`).
    - ❌ **NO branch names** (e.g., `feat/22-tooltip-sidecar-options`).
    - ❌ **NO pull request references** (e.g., `Merge pull request #25 from ...`).
    - ❌ **NO commit SHAs or developer git jargon.**
-3. **Simple & Readable:** Keep release notes concise, clean, bulleted, and immediately understandable to a World of Warcraft player browsing the CurseForge app or website.
 4. **CHANGELOG.md is Mandatory for CurseForge:** `BigWigsMods/packager` only publishes clean release notes to CurseForge if `CHANGELOG.md` exists at repository root (configured via `manual-changelog` in `.pkgmeta`). If `CHANGELOG.md` is missing, the packager silently falls back to running `git log` between tags, exposing internal commit messages, branch names, and issue closures. Always update `CHANGELOG.md` with the new player-facing version section prior to tagging.
 5. **Annotated Release Tags:** Always create annotated tags (`git tag -a vX.Y.Z -m "..."`) containing the clean release summary for GitHub Releases and git history clarity.
 
