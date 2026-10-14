@@ -320,7 +320,7 @@ local function InitializeOptions()
 
     -- Checkbox: Show hotkey hint
     local hintCheck = CreateFrame("CheckButton", "AzerothCompendiumHintCheck", panel, "InterfaceOptionsCheckButtonTemplate")
-    hintCheck:SetPoint("TOPLEFT", dockLabel, "BOTTOMLEFT", -4, -10)
+    hintCheck:SetPoint("TOPLEFT", dockLabel, "BOTTOMLEFT", -4, -8)
     local hintLabel = hintCheck.Text or _G[hintCheck:GetName() .. "Text"]
     if hintLabel then
         hintLabel:SetText("Show hotkey hint line on creature tooltips")
@@ -330,9 +330,21 @@ local function InitializeOptions()
         addon.db.settings.showHint = self:GetChecked()
     end)
 
+    -- Checkbox: Show tooltip info on unrecorded creatures (first encounter)
+    local newMobCheck = CreateFrame("CheckButton", "AzerothCompendiumNewMobCheck", panel, "InterfaceOptionsCheckButtonTemplate")
+    newMobCheck:SetPoint("TOPLEFT", hintCheck, "BOTTOMLEFT", 0, -2)
+    local newMobLabel = newMobCheck.Text or _G[newMobCheck:GetName() .. "Text"]
+    if newMobLabel then
+        newMobLabel:SetText("Show tooltip info on unrecorded creatures (first encounter)")
+        newMobLabel:SetFontObject("GameFontHighlight")
+    end
+    newMobCheck:SetScript("OnClick", function(self)
+        addon.db.settings.showNewMobTooltip = self:GetChecked()
+    end)
+
     -- Checkbox: Show average money dropped
     local moneyCheck = CreateFrame("CheckButton", "AzerothCompendiumMoneyCheck", panel, "InterfaceOptionsCheckButtonTemplate")
-    moneyCheck:SetPoint("TOPLEFT", hintCheck, "BOTTOMLEFT", 0, -4)
+    moneyCheck:SetPoint("TOPLEFT", newMobCheck, "BOTTOMLEFT", 0, -2)
     local moneyLabel = moneyCheck.Text or _G[moneyCheck:GetName() .. "Text"]
     if moneyLabel then
         moneyLabel:SetText("Show average coin dropped by creature")
@@ -344,7 +356,7 @@ local function InitializeOptions()
 
     -- Checkbox: Track Combat Log (Attacks, Spells, Immunities)
     local combatLogCheck = CreateFrame("CheckButton", "AzerothCompendiumCombatLogCheck", panel, "InterfaceOptionsCheckButtonTemplate")
-    combatLogCheck:SetPoint("TOPLEFT", moneyCheck, "BOTTOMLEFT", 0, -4)
+    combatLogCheck:SetPoint("TOPLEFT", moneyCheck, "BOTTOMLEFT", 0, -2)
     local combatLogLabel = combatLogCheck.Text or _G[combatLogCheck:GetName() .. "Text"]
     if combatLogLabel then
         combatLogLabel:SetText("Track mob attacks, spells, and immunities via Combat Log")
@@ -356,7 +368,7 @@ local function InitializeOptions()
 
     -- Checkbox: Show Minimap Button
     local minimapCheck = CreateFrame("CheckButton", "AzerothCompendiumMinimapCheck", panel, "InterfaceOptionsCheckButtonTemplate")
-    minimapCheck:SetPoint("TOPLEFT", combatLogCheck, "BOTTOMLEFT", 0, -4)
+    minimapCheck:SetPoint("TOPLEFT", combatLogCheck, "BOTTOMLEFT", 0, -2)
     local minimapLabel = minimapCheck.Text or _G[minimapCheck:GetName() .. "Text"]
     if minimapLabel then
         minimapLabel:SetText("Show Minimap compendium tome button")
@@ -372,7 +384,7 @@ local function InitializeOptions()
 
     -- Quick Action: Open Pokédex Window
     local openWinBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    openWinBtn:SetPoint("TOPLEFT", minimapCheck, "BOTTOMLEFT", 4, -14)
+    openWinBtn:SetPoint("TOPLEFT", minimapCheck, "BOTTOMLEFT", 4, -10)
     openWinBtn:SetSize(190, 26)
     openWinBtn:SetText("|cffffd100Open Compendium Window|r")
     openWinBtn:SetScript("OnClick", function()
@@ -392,6 +404,7 @@ local function InitializeOptions()
         addon:RefreshOptionsLayout()
 
         hintCheck:SetChecked(s.showHint ~= false)
+        newMobCheck:SetChecked(s.showNewMobTooltip ~= false)
         moneyCheck:SetChecked(s.showMoney ~= false)
         combatLogCheck:SetChecked(s.trackCombat ~= false)
         minimapCheck:SetChecked(s.showMinimap ~= false)

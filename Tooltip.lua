@@ -324,7 +324,8 @@ end
 -------------------------------------------------------------------------------
 
 function addon:UpdateCompanionTooltips(mob, unrecordedName)
-    if self:IsEmbeddedLayout() or ((not mob and not unrecordedName) or not GameTooltip:IsShown()) then
+    local hideNewMob = not mob and (self.db and self.db.settings and self.db.settings.showNewMobTooltip == false)
+    if self:IsEmbeddedLayout() or hideNewMob or ((not mob and not unrecordedName) or not GameTooltip:IsShown()) then
         lootTooltip:Hide()
         combatTooltip:Hide()
         professionTooltip:Hide()
@@ -469,11 +470,19 @@ function addon:OnTooltipSetUnit(tooltip, data)
     if not tooltip or not self.db then return end
 
     local _, unit = tooltip:GetUnit()
-    local guid = nil
+    if not unit and UnitExists("mouseover") then
+        unit = "mouseover"
+    end
 
-    if unit and UnitExists(unit) then
-        guid = UnitGUID(unit)
-    elseif data and data.guid then
+    if not self:IsEligibleMobUnit(unit) then
+        lootTooltip:Hide()
+        combatTooltip:Hide()
+        professionTooltip:Hide()
+        return
+    end
+
+    local guid = UnitGUID(unit)
+    if not guid and data and data.guid then
         guid = data.guid
     end
 
@@ -495,6 +504,13 @@ function addon:OnTooltipSetUnit(tooltip, data)
     -- Fetch recorded creature data
     local mapID = C_Map.GetBestMapForUnit("player") or 0
     local mob = self:GetMobData(npcID, mapID)
+
+    if not mob and self.db.settings.showNewMobTooltip == false then
+        lootTooltip:Hide()
+        combatTooltip:Hide()
+        professionTooltip:Hide()
+        return
+    end
 
     -- Resolve creature name
     local unitName = (unit and UnitExists(unit) and self:SafeString(UnitName(unit), nil))
@@ -644,7 +660,7 @@ modWatcher:SetScript("OnEvent", function(self, event)
         unit = "mouseover"
     end
 
-    if unit and UnitExists(unit) then
+    if addon:IsEligibleMobUnit(unit) then
         local guid = UnitGUID(unit)
         local npcID = addon:GetNPCIDFromGUID(guid)
         if not npcID then

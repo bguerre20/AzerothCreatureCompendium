@@ -33,7 +33,7 @@
   - **Sidecar Mode (`SIDECAR`):** Attach companion tooltips horizontally beside or vertically above/below the main tooltip.
   - **Embedded Mode (`EMBEDDED`):** Append creature data directly inside Blizzard's default `GameTooltip`.
   - **Anchor Point:** Attach tooltips to Blizzard's main tooltip or follow the mouse cursor.
-- **New Creature Indicator:** Shows a brief prompt on tooltips when you encounter an undocumented creature for the first time.
+- **New Creature Indicator:** Shows a brief prompt on attackable enemy creature tooltips when you encounter an undocumented mob for the first time (can be toggled off in settings or via `/acc newmob`).
 
 ### 2. Compendium Browser (`/acc`)
 - **Zone & Creature List:** Searchable list of discovered zones and creatures. Hover over any zone to view how many creatures and research ranks you have recorded there.
@@ -69,6 +69,7 @@ Use `/acc`, `/compendium`, `/pokedex`, or the legacy aliases `/bgl` and `/bgloot
 | `/acc layout <sidecar\|embedded>` | Switch between sidecar tooltips and the embedded tooltip |
 | `/acc dock <beside\|above>` | Position sidecar tooltips beside or above/below the main tooltip |
 | `/acc anchor <tooltip\|cursor>` | Anchor tooltips to the main tooltip or mouse cursor |
+| `/acc newmob` | Toggle tooltip info on unrecorded creatures |
 | `/acc max <1-25>` | Set the maximum number of items shown in tooltips |
 | `/acc lookup <name>` | Search for a recorded creature in chat |
 | `/acc reset confirm` | Clear all recorded compendium data |

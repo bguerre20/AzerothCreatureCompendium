@@ -109,8 +109,8 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, secret value detection/sanitization, and slash command registries. | `addon:IsSecretValue()`, `addon:SafeString()`, `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
 | **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB auto-migration, drop-rate math, query helpers, rank calculations, research rank badge icon mappings, subzone tracking, secret value sanitization, on-demand deferred spell resolution, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:RecordSubZone()`, `addon:GetMobSubZones()`, `addon:FormatMobLocationString()`, `addon:GetMobData()`, `addon:GetMobResearchRank()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts, deferred out-of-combat spell resolution, and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `addon:ProcessPendingSpellResolutions()`, `AzerothCompendiumCombatListenerFrame` |
-| **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, corpse GUID tracking, profession harvest correlation, coin transaction parser, and safe spell info resolver. | `addon:ResolveSpellInfo()`, `addon:GetSpellName()`, `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
-| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`) and first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
+| **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, hostile/attackable creature eligibility guard, corpse GUID tracking, profession harvest correlation, coin transaction parser, and safe spell info resolver. | `addon:ResolveSpellInfo()`, `addon:GetSpellName()`, `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IsEligibleMobUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
+| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`), hostile creature filtering, and toggleable first mob encounter discovery placeholders. | `addon:ShowMobTooltip()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search (by creature, zone, subzone, item, or spell), collapsible Zone tree (with hover tooltips for Bestiary Progression ranks and badge icons), 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, Bestiary Progression Rank display with Blizzard medal/portrait badges, creature sub-location display ("Found in:"), and minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()` |
 | **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
 
@@ -265,8 +265,9 @@ sequenceDiagram
     Player->>BlizzardTT: Hovers mouse over Creature
     BlizzardTT->>Tooltip: HookScript OnTooltipSetUnit
     activate Tooltip
-    Tooltip->>Tooltip: Extract unit GUID & NPC ID
+    Tooltip->>Tooltip: Verify attackable enemy creature (IsEligibleMobUnit) & extract NPC ID
     Tooltip->>DB: GetMobData(npcID, currentMapID)
+    Note over Tooltip: Early exit if unrecorded and showNewMobTooltip == false
 
     alt Embedded Layout Mode (separateTooltip == false or tooltipLayout == "EMBEDDED")
         Tooltip->>Tooltip: Hide dedicated sidecars
@@ -334,6 +335,7 @@ AzerothCreatureCompendiumDB
 │     ├── minQuality: number
 │     ├── showMoney: boolean
 │     ├── showHint: boolean
+│     ├── showNewMobTooltip: boolean
 │     ├── showSample: boolean
 │     ├── showMinimap: boolean
 │     ├── trackCombat: boolean

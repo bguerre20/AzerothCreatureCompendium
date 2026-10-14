@@ -42,6 +42,7 @@ addon.DEFAULT_SETTINGS = {
     minQuality = 0,                -- 0: Poor (grey), 1: Common, 2: Uncommon, 3: Rare, 4: Epic
     showMoney = true,              -- Display average coin drop
     showHint = true,               -- Show hotkey hints on mob tooltips
+    showNewMobTooltip = true,      -- Show tooltip status/hints on unrecorded creatures
     showSample = true,             -- Show drop occurrences and sample sizes
 
     -- Minimap
@@ -247,6 +248,9 @@ local function SlashCommandHandler(msg)
         else
             addon:Print("Usage: |cffffd100/acc anchor <tooltip|cursor>|r")
         end
+    elseif cmd == "newmob" or cmd == "firstencounter" or cmd == "unrecorded" then
+        addon.db.settings.showNewMobTooltip = not addon.db.settings.showNewMobTooltip
+        addon:Print("Unrecorded creature tooltip info: %s", addon.db.settings.showNewMobTooltip and "|cff00ff00Enabled|r" or "|cffff2020Disabled|r")
     elseif cmd == "max" or cmd == "top" or cmd == "limit" then
         local num = tonumber(param)
         if num and num >= 1 and num <= 25 then
@@ -289,6 +293,7 @@ local function SlashCommandHandler(msg)
         print("  |cffffd100/acc layout <sidecar|embedded>|r - Toggle dedicated sidecars vs embedded inside GameTooltip")
         print("  |cffffd100/acc anchor <tooltip|cursor>|r - Set tooltip anchor to main tooltip or mouse cursor")
         print("  |cffffd100/acc dock <beside|above>|r - Set sidecar docking orientation")
+        print("  |cffffd100/acc newmob|r - Toggle tooltip info on unrecorded creatures")
         print("  |cffffd100/acc max <1-25>|r - Max drops shown in tooltip")
         print("  |cffffd100/acc lookup <name>|r - Search recorded creature by name")
         print("  |cffffd100/acc reset confirm|r - Clear all recorded compendium history")
