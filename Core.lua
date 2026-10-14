@@ -164,6 +164,16 @@ function addon:GetNPCIDFromGUID(guid)
     return nil
 end
 
+-- Verify unit is an eligible attackable enemy/neutral creature (excludes players, pets, friendly NPCs, living unattackable NPCs, and critters)
+function addon:IsEligibleMobUnit(unit)
+    if not unit or not UnitExists(unit) then return false end
+    if UnitIsPlayer(unit) or UnitPlayerControlled(unit) then return false end
+    if UnitIsFriend("player", unit) then return false end
+    if not UnitIsDead(unit) and not UnitCanAttack("player", unit) then return false end
+    if self:SafeString(UnitCreatureType(unit), nil) == "Critter" then return false end
+    return true
+end
+
 -- Cache creature name and inspect metadata from a unit
 function addon:CacheUnit(unit)
     if not UnitExists(unit) then return end
@@ -190,14 +200,14 @@ function addon:CacheUnit(unit)
         creatureType = creatureType
     }
 
-    -- Update database if mob exists, OR if it is a hostile/neutral rare spawn (so sightings are recorded!)
+    -- Update database if mob exists, OR if it is an eligible attackable rare spawn (so sightings are recorded!)
     -- This prevents friendly NPCs, vendors, and questgivers from ever being added.
     local mapID, zoneName, coords, subZone = self:GetPlayerLocation()
     local isRare = (classification == "rare" or classification == "rareelite")
-    local isNotFriend = not UnitIsFriend("player", unit)
+    local isEligible = self:IsEligibleMobUnit(unit)
     local mobExists = self.db and self.db.zones and self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID]
 
-    if mobExists or (isRare and isNotFriend) then
+    if mobExists or (isRare and isEligible) then
         self:UpdateUnitMeta(npcID, mapID, zoneName, name, level, classification, creatureType, coords, subZone)
     end
 end

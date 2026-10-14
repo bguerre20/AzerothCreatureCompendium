@@ -82,6 +82,9 @@ function addon:InitDatabase()
     if db.settings.tooltipAnchor == nil then
         db.settings.tooltipAnchor = "BLIZZARD"
     end
+    if db.settings.showNewMobTooltip == nil then
+        db.settings.showNewMobTooltip = true
+    end
 
     db.zones = db.zones or {}
     db.npcToZones = db.npcToZones or {}
