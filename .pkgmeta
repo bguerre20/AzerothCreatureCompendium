@@ -11,9 +11,12 @@ ignore:
   - .github
   - .vscode
   - .gemini
+  - .agents
   - .tools
   - .luacheckrc
   - docs
+  - Art
+  - DEPLOYMENT_PIPELINE.md
   - deploy.bat
   - deploy.ps1
   - lint.ps1

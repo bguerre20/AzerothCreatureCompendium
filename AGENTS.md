@@ -14,20 +14,29 @@
 
 ---
 
-## 🚨 MANDATORY RULE: Architecture Sync (Definition of Done)
+## 🤖 Specialist Agent Pipeline (`wow-addon-studio`)
 
-**Every feature, bugfix, or refactoring branch MUST update [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) whenever architectural components are affected—even if the user or issue prompt does not explicitly request it.**
+This repository uses the global **`wow-addon-studio`** plugin pipeline. Activate the matching specialist skill/subagent for each phase of work:
+1. **Requirements & Design (`wow-spec-architect`):** Use when brainstorming, gathering requirements, or designing a new feature/bugfix spec before coding.
+2. **Implementation & Local Deploy (`wow-addon-engineer`):** Use when writing Lua code on a dedicated branch, enforcing zero-taint/secret-value safety, syncing `docs/ARCHITECTURE.md`, and running `lint.ps1` + `deploy.ps1`.
+3. **Branch Closeout & CurseForge Release (`wow-release-engineer`):** Use after in-game testing to audit `.pkgmeta`/`README.md`, merge/prune branches, author player-centric `CHANGELOG.md` notes, and push annotated `vX.Y.Z` tags.
+
+---
+
+## 🚨 MANDATORY RULE: Architecture & Doc Sync (Definition of Done)
+
+**Every feature, bugfix, or refactoring branch MUST update [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`README.md`](README.md) whenever architectural components or player-facing features are affected—even if the user or issue prompt does not explicitly request it.**
 
 Before declaring any task complete or submitting a pull request, you **MUST** run through this Architecture Audit checklist:
 
-| If your code touched... | You MUST update in `docs/ARCHITECTURE.md`: |
+| If your code touched... | You MUST update in `docs/ARCHITECTURE.md` & `README.md`: |
 | :--- | :--- |
 | **`Database.lua`** | • Update the **Database Architecture & Schema Specification** (ER tree).<br/>• Document any new fields, types, or backward-compatibility migrations.<br/>• Update data factory references if mutation methods changed. |
 | **`CombatLog.lua` or `Core.lua`** | • Update the **Combat & Immunity** or **Loot & Gathering** Mermaid sequence diagrams.<br/>• Update registered WoW client events in the **System Architecture Diagram**.<br/>• Document any new mechanic patterns or spell school mappings. |
-| **`Tooltip.lua` or `CompendiumWindow.lua`** | • Update the **Sidecar Tooltip Multi-Docking Engine** diagram.<br/>• Document new Pokédex tabs, 3D model behaviors, or search filters in the Component Breakdown. |
-| **`Config.lua`** | • Update default configuration options, color hex codes, or keybinding registries in the component breakdown. |
+| **`Tooltip.lua` or `CompendiumWindow.lua`** | • Update the **Dual Tooltip Layout & Docking Engine** diagram.<br/>• Document new Pokédex tabs, 3D model behaviors, or search filters in the Component Breakdown and `README.md`. |
+| **`Config.lua`** | • Update default configuration options, color hex codes, or slash commands in `docs/ARCHITECTURE.md` and the Slash Commands table in `README.md`. |
 | **`Options.lua`** | • Document new settings controls or Blizzard Interface Options categories. |
-| **New Files / TOC Changes** | • Update the **Component Breakdown & File Registry** table and TOC load order list. |
+| **New Files / TOC / Art Folders** | • Update the **Component Breakdown & File Registry** table and TOC load order list.<br/>• Ensure any non-runtime files/folders (e.g., `Art/`, docs, scripts) are excluded in **both** [`.pkgmeta`](.pkgmeta) and [`deploy.ps1`](deploy.ps1). |
 
 ---
 

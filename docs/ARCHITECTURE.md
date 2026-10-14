@@ -123,6 +123,8 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 | [CHANGELOG.md](../CHANGELOG.md) | Single source of truth for player-centric release notes. Consumed by BigWigs Packager to publish clean notes on CurseForge. | CurseForge, GitHub Releases, End Users |
 | [.luacheckrc](../.luacheckrc) | Static analysis configuration for LuaCheck defining WoW Classic globals and code quality rules. | GitHub Actions CI (`lint.yml`), `lint.ps1`, Developers |
 | [lint.ps1](../lint.ps1) | Local Windows PowerShell runner that executes or auto-downloads LuaCheck and generates audit reports. | Developers, AI Agents |
+| [deploy.ps1](../deploy.ps1) | Local deployment runner that enforces `lint.ps1` (`luacheck`) as a mandatory pre-deploy gate before copying runtime addon files into the local WoW AddOns directory. | Developers, AI Agents |
+| [DEPLOYMENT_PIPELINE.md](../DEPLOYMENT_PIPELINE.md) | End-to-end visual sequence documentation for the GitHub Actions -> BigWigs Packager -> CurseForge CDN release pipeline. | Developers, Release Engineers |
 | [.github/workflows/lint.yml](../.github/workflows/lint.yml) | Continuous Integration workflow running `lunarmodules/luacheck@v1` on pushes and PRs. | GitHub Actions CI |
 
 ---

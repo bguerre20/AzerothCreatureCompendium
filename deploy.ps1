@@ -15,6 +15,19 @@ if (-not (Test-Path $TargetDir)) {
 $CurrentDir = $PSScriptRoot
 if (-not $CurrentDir) { $CurrentDir = Get-Location }
 
+# 1. Pre-Deploy Static Analysis Gate (LuaCheck)
+$LintScript = Join-Path $CurrentDir "lint.ps1"
+if (Test-Path $LintScript) {
+    Write-Host "`n[Step 1/2] Running pre-deploy LuaCheck gate..." -ForegroundColor Cyan
+    & $LintScript
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "`n[ABORTED] LuaCheck failed! Fix lint errors before deploying to World of Warcraft." -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
+}
+
+Write-Host "`n[Step 2/2] Copying addon files to World of Warcraft..." -ForegroundColor Cyan
+
 # List of items/patterns to exclude from the in-game folder
 $Excludes = @(
     ".git*",
@@ -26,9 +39,12 @@ $Excludes = @(
     ".luacheck*",
     ".vscode*",
     ".gemini*",
+    ".agents*",
     "AGENTS.md",
+    "DEPLOYMENT_PIPELINE.md",
     ".pkgmeta",
-    "docs*"
+    "docs*",
+    "Art*"
 )
 
 Write-Host "Source: $CurrentDir" -ForegroundColor Gray
