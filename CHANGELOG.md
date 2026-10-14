@@ -1,5 +1,9 @@
 # Azeroth Creature Compendium
 
+## v0.10.4-beta (2026-10-14)
+- Fixed the minimap button appearing as a blank white circle when used with minimap addons such as Leatrix Plus and MinimapButtonBag.
+- Added support for square minimaps and LibDataBroker display bars.
+
 ## v0.10.3-beta (2026-10-14)
 - Added a setting in the Options panel and `/acc newmob` slash command to hide tooltip info on unrecorded creatures.
 - Fixed creature tooltips so friendly NPCs, unattackable NPCs, pets, and critters are ignored.
