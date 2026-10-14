@@ -175,12 +175,13 @@ local function SlashCommandHandler(msg)
     elseif cmd == "options" or cmd == "config" or cmd == "menu" or cmd == "settings" then
         addon:OpenOptions()
     elseif cmd == "minimap" or cmd == "icon" then
-        addon.db.settings.showMinimap = not addon.db.settings.showMinimap
-        if addon.minimapButton then
-            if addon.db.settings.showMinimap then
-                addon.minimapButton:Show()
-            else
-                addon.minimapButton:Hide()
+        local newState = not addon.db.settings.showMinimap
+        if addon.SetMinimapButtonShown then
+            addon:SetMinimapButtonShown(newState)
+        else
+            addon.db.settings.showMinimap = newState
+            if addon.minimapButton then
+                if newState then addon.minimapButton:Show() else addon.minimapButton:Hide() end
             end
         end
         addon:Print("Minimap button: %s", addon.db.settings.showMinimap and "|cff00ff00Enabled|r" or "|cffff2020Disabled|r")

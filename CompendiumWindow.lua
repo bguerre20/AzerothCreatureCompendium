@@ -972,8 +972,11 @@ function addon:ToggleLootWindow()
 end
 
 -------------------------------------------------------------------------------
--- 3. Draggable Minimap Button with Bronze Theme & Scaling
+-- 3. Draggable Minimap Button with Bronze Theme & Addon Compatibility
 -------------------------------------------------------------------------------
+
+local MINIMAP_ADDON_NAME = "AzerothCreatureCompendium"
+local MINIMAP_ICON_TEXTURE = "Interface\\Icons\\INV_Misc_Book_09"
 
 local function GetMinimapRadius()
     if not Minimap then return 80 end
@@ -983,59 +986,199 @@ local function GetMinimapRadius()
 end
 
 local function UpdateMinimapButtonPosition(btn, angle)
-    if not Minimap or not btn then return end
+    if not Minimap or not btn or btn:GetParent() ~= Minimap then return end
     local rad = math.rad(angle or 210)
     local radius = GetMinimapRadius()
+    local cos = math.cos(rad)
+    local sin = math.sin(rad)
 
-    local x = math.cos(rad) * radius
-    local y = math.sin(rad) * radius
+    local x, y
+    local getShape = _G["GetMinimapShape"]
+    local isSquare = type(getShape) == "function" and getShape() == "SQUARE"
+    if isSquare then
+        local maxCoord = math.max(math.abs(cos), math.abs(sin))
+        if maxCoord > 0 then
+            x = (cos / maxCoord) * radius
+            y = (sin / maxCoord) * radius
+        else
+            x = cos * radius
+            y = sin * radius
+        end
+    else
+        x = cos * radius
+        y = sin * radius
+    end
 
     btn:ClearAllPoints()
     btn:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
+local function PopulateMinimapTooltip(tt)
+    if not tt or not tt.AddLine then return end
+    tt:AddLine("|cff00ff96Azeroth Creature Compendium|r")
+    tt:AddLine("|cffffffffLeft-Click:|r Open Creature Compendium", 0.8, 0.8, 0.8)
+    tt:AddLine("|cffffffffRight-Click:|r Addon Settings", 0.8, 0.8, 0.8)
+    tt:AddLine("|cffc7a16b(Drag left click to move)|r", 0.6, 0.6, 0.6)
+end
+
+local function ApplyBronzeMinimapStyling(btn, iconDB)
+    if not btn or btn.accBronzeStyled then return end
+    btn.accBronzeStyled = true
+
+    if btn.icon and not btn.Icon then
+        btn.Icon = btn.icon
+    end
+
+    for i = 1, btn:GetNumRegions() do
+        local region = select(i, btn:GetRegions())
+        if region and region:IsObjectType("Texture") then
+            local layer = region:GetDrawLayer()
+            if layer == "OVERLAY" then
+                region:SetVertexColor(0.92, 0.76, 0.48)
+                btn.border = btn.border or region
+            elseif layer == "BACKGROUND" then
+                region:SetVertexColor(0.12, 0.10, 0.08, 1)
+                btn.background = btn.background or region
+            end
+        end
+    end
+
+    if btn.HookScript then
+        btn:HookScript("OnDragStop", function()
+            if addon.db and addon.db.settings and iconDB and iconDB.minimapPos then
+                addon.db.settings.minimapAngle = iconDB.minimapPos
+            end
+        end)
+    end
+end
+
+function addon:RegisterDataBrokerLauncher()
+    if self.ldbObject then return self.ldbObject end
+    local LibStub = _G["LibStub"]
+    if not LibStub or type(LibStub) ~= "table" or not LibStub.GetLibrary then return nil end
+
+    local LDB = LibStub:GetLibrary("LibDataBroker-1.1", true)
+    if not LDB then return nil end
+
+    local dataObj = LDB:GetDataObjectByName(MINIMAP_ADDON_NAME)
+    if not dataObj then
+        dataObj = LDB:NewDataObject(MINIMAP_ADDON_NAME, {
+            type = "launcher",
+            text = "Azeroth Creature Compendium",
+            label = "Creature Compendium",
+            icon = MINIMAP_ICON_TEXTURE,
+            OnClick = function(_, button)
+                if button == "RightButton" then
+                    addon:OpenOptions()
+                else
+                    addon:ToggleCompendiumWindow()
+                end
+            end,
+            OnTooltipShow = function(tt)
+                PopulateMinimapTooltip(tt)
+            end,
+        })
+    end
+
+    self.ldbObject = dataObj
+    return dataObj
+end
+
+function addon:SetMinimapButtonShown(shown)
+    local isShown = (shown ~= false)
+    if self.db and self.db.settings then
+        self.db.settings.showMinimap = isShown
+        if self.db.settings.minimapIcon then
+            self.db.settings.minimapIcon.hide = not isShown
+        end
+    end
+
+    if self.ldbIcon then
+        if isShown then
+            self.ldbIcon:Show(MINIMAP_ADDON_NAME)
+        else
+            self.ldbIcon:Hide(MINIMAP_ADDON_NAME)
+        end
+    elseif self.minimapButton then
+        if isShown then
+            self.minimapButton:Show()
+        else
+            self.minimapButton:Hide()
+        end
+    end
+end
+
 function addon:CreateMinimapButton()
     if self.minimapButton then return self.minimapButton end
 
+    local ldbObject = self:RegisterDataBrokerLauncher()
+    local LibStub = _G["LibStub"]
+    local LDBIcon = (LibStub and type(LibStub) == "table" and LibStub.GetLibrary) and LibStub:GetLibrary("LibDBIcon-1.0", true) or nil
+
+    -- 1. Prefer LibDBIcon-1.0 when present in the addon environment (Leatrix Plus, BugSack, MBB, etc.)
+    if LDBIcon and ldbObject then
+        local s = self.db and self.db.settings
+        local iconDB = (s and s.minimapIcon) or {}
+        iconDB.hide = (s and s.showMinimap == false) or false
+        iconDB.minimapPos = (s and s.minimapAngle) or iconDB.minimapPos or 210
+        if s then
+            s.minimapIcon = iconDB
+        end
+
+        if not LDBIcon:IsRegistered(MINIMAP_ADDON_NAME) then
+            LDBIcon:Register(MINIMAP_ADDON_NAME, ldbObject, iconDB)
+        end
+        self.ldbIcon = LDBIcon
+
+        local ldbBtn = LDBIcon:GetMinimapButton(MINIMAP_ADDON_NAME)
+        if ldbBtn then
+            ApplyBronzeMinimapStyling(ldbBtn, iconDB)
+            self.minimapButton = ldbBtn
+            return ldbBtn
+        end
+    end
+
+    -- 2. Standalone fallback button using standard 3-region LibDBIcon layout (no MaskTexture)
     local btn = CreateFrame("Button", "AzerothCompendiumMinimapButton", Minimap)
     btn:SetSize(32, 32)
     btn:SetFrameStrata("MEDIUM")
     btn:SetFrameLevel(8)
-    btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", "ADD")
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:RegisterForDrag("LeftButton")
 
-    -- Solid dark background
+    -- Solid dark background (standard BACKGROUND region)
     local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetSize(22, 22)
+    bg:SetSize(21, 21)
     bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
     bg:SetVertexColor(0.12, 0.10, 0.08, 1)
     bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    btn.background = bg
 
-    -- Tome icon
-    local icon = btn:CreateTexture(nil, "ARTWORK")
+    -- Tome icon (named "$parentIcon" and exposed on .icon / .Icon for third-party minimap button managers)
+    local icon = btn:CreateTexture("$parentIcon", "ARTWORK")
     icon:SetSize(18, 18)
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+    icon:SetTexture(MINIMAP_ICON_TEXTURE)
+    icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
     icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    btn.icon = icon
+    btn.Icon = icon
 
-    -- Circular mask
-    if btn.CreateMaskTexture then
-        local mask = btn:CreateMaskTexture()
-        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        mask:SetSize(19, 19)
-        mask:SetPoint("CENTER", btn, "CENTER", 0, 0)
-        icon:AddMaskTexture(mask)
-    end
-
-    -- Warm bronze tracking border ring
+    -- Warm bronze tracking border ring (standard OVERLAY region)
     local border = btn:CreateTexture(nil, "OVERLAY")
     border:SetSize(52, 52)
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
     border:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
     border:SetVertexColor(0.92, 0.76, 0.48)
+    btn.border = border
 
-    -- Dragging
+    if ldbObject then
+        btn.dataObject = ldbObject
+    end
+
+    -- Dragging (skip radial Minimap clamping if reparented into a button bag frame)
     btn:SetScript("OnDragStart", function(b)
+        if b:GetParent() ~= Minimap then return end
         b.isDragging = true
         b:SetScript("OnUpdate", function(selfBtn)
             local mx, my = Minimap:GetCenter()
@@ -1056,10 +1199,7 @@ function addon:CreateMinimapButton()
     -- Tooltip on Hover
     btn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_LEFT")
-        GameTooltip:AddLine("|cff00ff96Azeroth Creature Compendium|r")
-        GameTooltip:AddLine("|cffffffffLeft-Click:|r Open Creature Compendium", 0.8, 0.8, 0.8)
-        GameTooltip:AddLine("|cffffffffRight-Click:|r Addon Settings", 0.8, 0.8, 0.8)
-        GameTooltip:AddLine("|cffc7a16b(Drag left click to move)|r", 0.6, 0.6, 0.6)
+        PopulateMinimapTooltip(GameTooltip)
         GameTooltip:Show()
     end)
 
@@ -1077,8 +1217,6 @@ function addon:CreateMinimapButton()
     end)
 
     self.minimapButton = btn
-
-
 
     local savedAngle = (self.db and self.db.settings and self.db.settings.minimapAngle) or 210
     UpdateMinimapButtonPosition(btn, savedAngle)
