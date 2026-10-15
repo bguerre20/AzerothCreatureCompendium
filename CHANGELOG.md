@@ -1,5 +1,9 @@
 # Azeroth Creature Compendium
 
+## v0.10.6-beta (2026-10-15)
+- Fixed a bug where destroying enemy totems, wards (such as Murloc Healing Wards), or secondary targets mid-combat without looting them did not always count as a kill.
+- Added a check so creatures tapped by other players are not counted toward your kill total.
+
 ## v0.10.5-beta (2026-10-15)
 - Fixed a Lua error when hovering over creatures inside dungeons and battlegrounds.
 - Disabled all addon activity while inside PvP battlegrounds and arenas.
