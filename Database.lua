@@ -85,6 +85,9 @@ function addon:InitDatabase()
     if db.settings.showNewMobTooltip == nil then
         db.settings.showNewMobTooltip = true
     end
+    if db.settings.debugMode == nil then
+        db.settings.debugMode = false
+    end
 
     db.zones = db.zones or {}
     db.npcToZones = db.npcToZones or {}
@@ -193,14 +196,18 @@ function addon:InitDatabase()
     end
 
     -- Sanitize existing zone, mob, and spell names against tainted/secret strings
+    self.npcNameCache = self.npcNameCache or {}
     for mapID, zone in pairs(db.zones) do
         zone.name = self:SafeString(zone.name, "Zone " .. mapID)
         for npcID, mob in pairs(zone.mobs or {}) do
             mob.name = self:SafeString(mob.name, "Creature " .. npcID)
+            if mob.name and not string.find(mob.name, "^Creature %d+") then
+                self.npcNameCache[npcID] = mob.name
+            end
             if not mob.subZones then
                 mob.subZones = {}
             end
-            if not mob.zoneName then
+            if not mob.zoneName or mob.zoneName == "Unknown Zone" then
                 mob.zoneName = zone.name
             end
             if not mob.mapID then
@@ -222,9 +229,10 @@ end
 
 -- Core factory: ensures Zone and Mob exist with the new Pokédex structure
 function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
+    npcID = self:SafeNumber(npcID, nil)
     if not npcID or npcID <= 0 then return nil end
     if not self.db then self:InitDatabase() end
-    mapID = mapID or 0
+    mapID = self:SafeNumber(mapID, 0) or 0
     zoneName = self:SafeString(zoneName, "Unknown Zone")
     mobName = self:SafeString(mobName, "Creature " .. npcID)
 
@@ -239,6 +247,23 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
         self.db.zones[mapID] = zone
     elseif zoneName ~= "Unknown Zone" and (zone.name == "Unknown Zone" or not zone.name) then
         zone.name = zoneName
+    end
+
+    -- Migrate creature out of fallback "Unknown Zone" (mapID 0) if now encountered in a resolved zone/dungeon
+    if mapID ~= 0 and zoneName ~= "Unknown Zone" and not zone.mobs[npcID] then
+        local unknownZone = self.db.zones[0]
+        if unknownZone and unknownZone.mobs and unknownZone.mobs[npcID] then
+            zone.mobs[npcID] = unknownZone.mobs[npcID]
+            zone.mobs[npcID].mapID = mapID
+            zone.mobs[npcID].zoneName = zone.name
+            unknownZone.mobs[npcID] = nil
+            if self.db.npcToZones and self.db.npcToZones[npcID] then
+                self.db.npcToZones[npcID][0] = nil
+            end
+            if next(unknownZone.mobs) == nil then
+                self.db.zones[0] = nil
+            end
+        end
     end
 
     -- 2. Reverse index NPC to Zone for cross-zone queries
@@ -301,11 +326,36 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
         mob.lastSeen = time()
     end
 
+    if mob.name and mob.name ~= "" and not string.find(mob.name, "^Creature %d+") then
+        self.npcNameCache = self.npcNameCache or {}
+        self.npcNameCache[npcID] = mob.name
+    end
+
+    -- Enrich from cached unit metadata if available
+    local meta = self.unitMetaCache and self.unitMetaCache[npcID]
+    if meta then
+        if meta.classification and meta.classification ~= "" and (not mob.classification or mob.classification == "normal") then
+            mob.classification = meta.classification
+        end
+        if meta.creatureType and meta.creatureType ~= "" and not mob.creatureType then
+            mob.creatureType = meta.creatureType
+        end
+        local cachedLevel = self:SafeNumber(meta.level, nil)
+        if cachedLevel and cachedLevel > 0 then
+            if not mob.minLevel or cachedLevel < mob.minLevel then
+                mob.minLevel = cachedLevel
+            end
+            if not mob.maxLevel or cachedLevel > mob.maxLevel then
+                mob.maxLevel = cachedLevel
+            end
+        end
+    end
+
     -- Structure guarantee
     if not mob.subZones then
         mob.subZones = {}
     end
-    if not mob.zoneName then
+    if not mob.zoneName or mob.zoneName == "Unknown Zone" then
         mob.zoneName = zone.name
     end
     if not mob.mapID then
@@ -416,6 +466,7 @@ end
 function addon:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType, coords, subZone)
     classification = self:SafeString(classification, nil)
     creatureType = self:SafeString(creatureType, nil)
+    level = self:SafeNumber(level, nil)
     local mob = self:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
     if not mob then return end
 
@@ -466,22 +517,9 @@ function addon:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCop
         mob.avgMoney = loot.avgMoney
     end
 
-    -- Record Coordinates (store up to 5 points)
+    -- Record Coordinates (rare spawns only)
     if coords and coords.x and coords.y then
-        loot.coords = loot.coords or {}
-        local isDuplicate = false
-        for _, pt in ipairs(loot.coords) do
-            if math.abs(pt.x - coords.x) < 0.8 and math.abs(pt.y - coords.y) < 0.8 then
-                isDuplicate = true
-                break
-            end
-        end
-        if not isDuplicate then
-            table.insert(loot.coords, 1, { x = coords.x, y = coords.y, time = time() })
-            if #loot.coords > 5 then
-                table.remove(loot.coords)
-            end
-        end
+        self:RecordCoordinates(mob, coords)
     end
 
     -- Record Items Looted
@@ -558,22 +596,9 @@ function addon:RecordProfessionLoot(mapID, zoneName, npcID, mobName, professionN
         prof.bySkill[professionName].emptyHarvests = prof.bySkill[professionName].emptyHarvests + 1
     end
 
-    -- Record Coordinates (store up to 5 points)
+    -- Record Coordinates (rare spawns only)
     if coords and coords.x and coords.y then
-        mob.coords = mob.coords or {}
-        local isDuplicate = false
-        for _, pt in ipairs(mob.coords) do
-            if math.abs(pt.x - coords.x) < 0.8 and math.abs(pt.y - coords.y) < 0.8 then
-                isDuplicate = true
-                break
-            end
-        end
-        if not isDuplicate then
-            table.insert(mob.coords, 1, { x = coords.x, y = coords.y, time = time() })
-            if #mob.coords > 5 then
-                table.remove(mob.coords)
-            end
-        end
+        self:RecordCoordinates(mob, coords)
     end
 
     -- Record Items Harvested

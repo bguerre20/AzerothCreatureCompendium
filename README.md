@@ -8,7 +8,7 @@
 **A personal creature journal and Pokédex for World of Warcraft Forever.**
 
 **Azeroth Creature Compendium (ACC)** records information about the creatures you encounter as you explore, fight, and loot:
-- **Creature Info**: Level ranges, creature family (Beast, Humanoid, Undead, Dragonkin, etc.), local subzones, and rare/elite classification. Map coordinates are saved for rare spawns.
+- **Creature Info**: Level ranges, creature family (Beast, Humanoid, Undead, Dragonkin, etc.), open-world zones and dungeons, local subzones, and rare/elite classification. Map coordinates are saved for rare spawns.
 - **Spells & Abilities**: Spells cast by each mob, tracked with spell icons, school colors, and cast counts.
 - **Immunities**: Tracks creature immunities observed during combat, including spell schools (*Fire, Frost, Nature, Shadow, Arcane, Holy, Physical*) and mechanics (*Taunt, Bleed, Stun, Polymorph, Fear, Snare/Root, Silence, Sleep, Poison*) without using restricted combat log events.
 - **Loot & Drop Rates**: Item drop percentages, sample sizes (e.g., `4/28 drops`), empty loot counts, and average coin dropped.
@@ -36,7 +36,7 @@
 - **New Creature Indicator:** Shows a brief prompt on attackable enemy creature tooltips when you encounter an undocumented mob for the first time (can be toggled off in settings or via `/acc newmob`).
 
 ### 2. Compendium Browser (`/acc`)
-- **Zone & Creature List:** Searchable list of discovered zones and creatures. Hover over any zone to view how many creatures and research ranks you have recorded there.
+- **Zone & Creature List:** Searchable list of discovered open-world zones, dungeons, and creatures. Hover over any zone or dungeon to view how many creatures and research ranks you have recorded there.
 - **Creature Entry Card:**
   - **3D Model Preview:** Interactive creature model with click-and-drag rotation.
   - **Bestiary Ranks:** Creatures gain research ranks as you kill, loot, and harvest them, progressing from *Safari Greenhorn* to *Nesingwary's Apprentice*, *Master of the Hunt*, and *The Hemetinator*.
@@ -71,6 +71,7 @@ Use `/acc`, `/compendium`, `/pokedex`, or the legacy aliases `/bgl` and `/bgloot
 | `/acc dock <beside\|above>` | Position sidecar tooltips beside or above/below the main tooltip |
 | `/acc anchor <tooltip\|cursor>` | Anchor tooltips to the main tooltip or mouse cursor |
 | `/acc newmob` | Toggle tooltip info on unrecorded creatures |
+| `/acc debug` | Toggle debug mode (show raw Lua errors vs fail-safe suppression) |
 | `/acc max <1-25>` | Set the maximum number of items shown in tooltips |
 | `/acc lookup <name>` | Search for a recorded creature in chat |
 | `/acc reset confirm` | Clear all recorded compendium data |

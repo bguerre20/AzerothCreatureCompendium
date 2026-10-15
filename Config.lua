@@ -52,6 +52,9 @@ addon.DEFAULT_SETTINGS = {
     -- Combat Log Discovery
     trackCombat = true,            -- Monitor combat log for attacks and spells
     trackImmunities = true,        -- Monitor combat log for spell/mechanic immunities
+
+    -- Diagnostics & Error Handling
+    debugMode = false,             -- When false (default), suppress unexpected API restriction errors; when true, surface raw Lua errors
 }
 
 -- Quality text and colors
@@ -118,30 +121,58 @@ addon.TAUNT_SPELLS = {
     [56222] = true, -- Dark Command
 }
 
--- Secret value detection (WoW 11.0+ / 12.0+ security protection against combat-tainted secret strings)
+-- Secret value detection (WoW 11.0+ / 12.0+ security protection against combat-tainted secret values)
 function addon:IsSecretValue(val)
-    if val == nil then return false end
-    if issecretvalue and issecretvalue(val) then
-        return true
+    if issecretvalue then
+        local ok, res = pcall(issecretvalue, val)
+        if ok and res then
+            return true
+        end
     end
-    -- In WoW 11.0+, secret values error on tostring or string operations when execution is tainted
+    if issecrettable and type(val) == "table" then
+        local ok, res = pcall(issecrettable, val)
+        if ok and res then
+            return true
+        end
+    end
+    local okNil, isNil = pcall(function() return val == nil end)
+    if not okNil then return true end
+    if isNil then return false end
+
+    -- In WoW 11.0+ / 12.0+, secret values error on tostring, comparison, or arithmetic/string operations when tainted
     local ok = pcall(function()
         local _ = tostring(val)
+        local _ = (val == val)
     end)
     if not ok then return true end
-    if type(val) == "string" then
+
+    local t = type(val)
+    if t == "string" then
         local okOps = pcall(function()
             local _ = string.sub(val, 1, 0)
             local _ = (val == "")
         end)
         if not okOps then return true end
+    elseif t == "number" then
+        local okNum = pcall(function()
+            local _ = (val > 0)
+            local _ = val + 0
+        end)
+        if not okNum then return true end
+    elseif t == "boolean" then
+        local okBool = pcall(function()
+            if val then
+                local _ = true
+            end
+        end)
+        if not okBool then return true end
     end
     return false
 end
 
 -- Safe string coercion returning fallback if val is secret, nil, or invalid
 function addon:SafeString(val, fallback)
-    if val == nil or self:IsSecretValue(val) then
+    if self:IsSecretValue(val) or val == nil then
         return fallback
     end
     if type(val) == "string" then
@@ -150,6 +181,46 @@ function addon:SafeString(val, fallback)
         return tostring(val)
     end
     return fallback
+end
+
+-- Safe number coercion returning fallback if val is secret, nil, or non-numeric
+function addon:SafeNumber(val, fallback)
+    if self:IsSecretValue(val) or val == nil then
+        return fallback
+    end
+    local ok, num = pcall(tonumber, val)
+    if not ok or not num or self:IsSecretValue(num) then
+        return fallback
+    end
+    return num
+end
+
+-- Safe boolean coercion returning fallback if val is secret or nil
+function addon:SafeBool(val, fallback)
+    if self:IsSecretValue(val) or val == nil then
+        return fallback or false
+    end
+    local ok, res = pcall(function()
+        return val and true or false
+    end)
+    if not ok or self:IsSecretValue(res) then
+        return fallback or false
+    end
+    return res
+end
+
+-- Check whether developer debug mode is enabled
+function addon:IsDebugMode()
+    return (self.db and self.db.settings and self.db.settings.debugMode == true) or false
+end
+
+-- Execute a function safely: suppresses unexpected errors in normal mode (debugMode == false),
+-- or allows real Lua errors to surface when debugMode == true.
+function addon:SafeCall(func, ...)
+    if self:IsDebugMode() then
+        return true, func(...)
+    end
+    return pcall(func, ...)
 end
 
 -- Message printer helper
@@ -252,6 +323,9 @@ local function SlashCommandHandler(msg)
     elseif cmd == "newmob" or cmd == "firstencounter" or cmd == "unrecorded" then
         addon.db.settings.showNewMobTooltip = not addon.db.settings.showNewMobTooltip
         addon:Print("Unrecorded creature tooltip info: %s", addon.db.settings.showNewMobTooltip and "|cff00ff00Enabled|r" or "|cffff2020Disabled|r")
+    elseif cmd == "debug" or cmd == "debugmode" then
+        addon.db.settings.debugMode = not addon.db.settings.debugMode
+        addon:Print("Debug mode (show raw Lua errors): %s", addon.db.settings.debugMode and "|cffff8000Enabled|r" or "|cff00ff00Disabled (Safe Mode)|r")
     elseif cmd == "max" or cmd == "top" or cmd == "limit" then
         local num = tonumber(param)
         if num and num >= 1 and num <= 25 then
@@ -295,6 +369,7 @@ local function SlashCommandHandler(msg)
         print("  |cffffd100/acc anchor <tooltip|cursor>|r - Set tooltip anchor to main tooltip or mouse cursor")
         print("  |cffffd100/acc dock <beside|above>|r - Set sidecar docking orientation")
         print("  |cffffd100/acc newmob|r - Toggle tooltip info on unrecorded creatures")
+        print("  |cffffd100/acc debug|r - Toggle Debug Mode (show raw Lua errors vs fail-safe suppression)")
         print("  |cffffd100/acc max <1-25>|r - Max drops shown in tooltip")
         print("  |cffffd100/acc lookup <name>|r - Search recorded creature by name")
         print("  |cffffd100/acc reset confirm|r - Clear all recorded compendium history")

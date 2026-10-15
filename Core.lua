@@ -7,7 +7,7 @@
 local ADDON_NAME, addon = ...
 
 -- Runtime caches
-addon.npcNameCache = {}
+addon.npcNameCache = addon.npcNameCache or {}
 addon.lootedCorpseGUIDs = {}
 addon.corpseHistoryList = {}
 addon.harvestedCorpseGUIDs = {}
@@ -49,16 +49,50 @@ addon.GATHER_SPELL_IDS = {
     [20222] = "Engineering",
 }
 
+-- Deterministic hash for fallback zone IDs when neither uiMapID nor instanceID is available
+local function HashZoneNameToID(name)
+    if not name or name == "" then return 0 end
+    local hash = 0
+    for i = 1, #name do
+        hash = (hash * 31 + string.byte(name, i)) % 90000
+    end
+    return 200000 + hash
+end
+
+-- Check whether the player is currently inside a PvP Battleground or Arena (addon is completely inactive in PvP instances)
+function addon:IsInBattleground()
+    if IsInInstance then
+        local ok, inInst, instType = pcall(IsInInstance)
+        if ok and self:SafeBool(inInst, false) then
+            local safeType = self:SafeString(instType, nil)
+            if safeType == "pvp" or safeType == "arena" then
+                return true
+            end
+        end
+    end
+    if GetInstanceInfo then
+        local ok, _, instType = pcall(GetInstanceInfo)
+        if ok then
+            local safeType = self:SafeString(instType, nil)
+            if safeType == "pvp" or safeType == "arena" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- Safe spell name and texture resolver supporting modern C_Spell and classic GetSpellInfo
 -- Returns nil, nil if spell information is restricted by Blizzard's secret value system
 function addon:ResolveSpellInfo(spellID)
+    spellID = self:SafeNumber(spellID, nil)
     if not spellID then return nil, nil end
     local spellName, spellTexture = nil, nil
     if C_Spell and C_Spell.GetSpellInfo then
         local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
-        if ok and info then
+        if ok and info and not self:IsSecretValue(info) then
             spellName = self:SafeString(info.name, nil)
-            spellTexture = info.iconID
+            spellTexture = self:SafeNumber(info.iconID, nil) or self:SafeString(info.iconID, nil)
         end
     end
     if not spellName and C_Spell and C_Spell.GetSpellName then
@@ -71,7 +105,7 @@ function addon:ResolveSpellInfo(spellID)
         local ok, name, _, icon = pcall(GetSpellInfo, spellID)
         if ok then
             spellName = self:SafeString(name, nil)
-            spellTexture = spellTexture or icon
+            spellTexture = spellTexture or self:SafeNumber(icon, nil) or self:SafeString(icon, nil)
         end
     end
     return spellName, spellTexture
@@ -85,6 +119,7 @@ end
 
 -- Identify gathering profession by spell ID or localized name
 function addon:IdentifyGatheringSpell(spellID)
+    spellID = self:SafeNumber(spellID, nil)
     if not spellID then return nil end
 
     if self.GATHER_SPELL_IDS[spellID] then
@@ -122,30 +157,95 @@ function addon:IdentifyGatheringSpell(spellID)
     return nil
 end
 
--- Coordinate and Zone retrieval helper
+-- Coordinate and Zone retrieval helper (supports open-world UI maps as well as dungeons and raids)
 function addon:GetPlayerLocation()
-    local mapID = C_Map.GetBestMapForUnit("player")
-    if not mapID then
-        return 0, "Unknown Zone", nil, nil
+    local inInstance, instType = false, "none"
+    if IsInInstance then
+        local ok, inInst, iType = pcall(IsInInstance)
+        if ok then
+            inInstance = self:SafeBool(inInst, false)
+            instType = self:SafeString(iType, "none")
+        end
     end
 
-    local mapInfo = C_Map.GetMapInfo(mapID)
-    local zoneName = (mapInfo and mapInfo.name) or "Unknown Zone"
+    local instanceName, instanceType, instanceID
+    if GetInstanceInfo then
+        local ok, iName, iType, _, _, _, _, _, iID = pcall(GetInstanceInfo)
+        if ok then
+            instanceName = self:SafeString(iName, nil)
+            instanceType = self:SafeString(iType, instType)
+            instanceID = self:SafeNumber(iID, nil)
+        end
+    end
+    instanceType = instanceType or instType
 
+    local isInstance = inInstance or (instanceType and instanceType ~= "none")
+    local mapID = nil
+    local zoneName = nil
     local coords = nil
-    local pos = C_Map.GetPlayerMapPosition(mapID, "player")
-    if pos and pos.x and pos.y and (pos.x ~= 0 or pos.y ~= 0) then
-        coords = {
-            x = math.floor(pos.x * 1000 + 0.5) / 10,
-            y = math.floor(pos.y * 1000 + 0.5) / 10
-        }
+
+    if isInstance then
+        zoneName = instanceName
+        if not zoneName or zoneName == "" then
+            zoneName = (GetRealZoneText and self:SafeString(GetRealZoneText(), nil))
+                or (GetZoneText and self:SafeString(GetZoneText(), nil))
+                or "Unknown Zone"
+        end
+
+        if instanceID and instanceID > 0 then
+            mapID = 100000 + instanceID
+        elseif C_Map and C_Map.GetBestMapForUnit then
+            local okMap, bestMap = pcall(C_Map.GetBestMapForUnit, "player")
+            if okMap then
+                mapID = self:SafeNumber(bestMap, nil)
+            end
+        end
+
+        if not mapID then
+            mapID = (zoneName ~= "Unknown Zone") and HashZoneNameToID(zoneName) or 0
+        end
+    else
+        if C_Map and C_Map.GetBestMapForUnit then
+            local okMap, bestMap = pcall(C_Map.GetBestMapForUnit, "player")
+            if okMap then
+                mapID = self:SafeNumber(bestMap, nil)
+            end
+        end
+
+        if mapID and C_Map and C_Map.GetMapInfo then
+            local okInfo, mapInfo = pcall(C_Map.GetMapInfo, mapID)
+            if okInfo and mapInfo and not self:IsSecretValue(mapInfo) then
+                zoneName = self:SafeString(mapInfo.name, nil)
+            end
+        end
+
+        if not zoneName or zoneName == "" then
+            zoneName = (GetRealZoneText and self:SafeString(GetRealZoneText(), nil))
+                or (GetZoneText and self:SafeString(GetZoneText(), nil))
+                or "Unknown Zone"
+        end
+
+        if not mapID then
+            mapID = (zoneName ~= "Unknown Zone") and HashZoneNameToID(zoneName) or 0
+        elseif mapID > 0 and mapID < 100000 and C_Map and C_Map.GetPlayerMapPosition then
+            local okPos, pos = pcall(C_Map.GetPlayerMapPosition, mapID, "player")
+            if okPos and pos and not self:IsSecretValue(pos) then
+                local px = self:SafeNumber(pos.x, nil)
+                local py = self:SafeNumber(pos.y, nil)
+                if px and py and (px ~= 0 or py ~= 0) then
+                    coords = {
+                        x = math.floor(px * 1000 + 0.5) / 10,
+                        y = math.floor(py * 1000 + 0.5) / 10
+                    }
+                end
+            end
+        end
     end
 
-    local subZone = GetSubZoneText()
+    local subZone = GetSubZoneText and self:SafeString(GetSubZoneText(), nil) or nil
     if not subZone or subZone == "" then
-        subZone = GetMinimapZoneText()
+        subZone = GetMinimapZoneText and self:SafeString(GetMinimapZoneText(), nil) or nil
     end
-    subZone = self:SafeString(subZone, nil)
     if subZone == zoneName or subZone == "" then
         subZone = nil
     end
@@ -153,10 +253,18 @@ function addon:GetPlayerLocation()
     return mapID, zoneName, coords, subZone
 end
 
+-- Ensure a unit token is a non-secret string before passing to WoW C-APIs (prevents secret value argument errors)
+function addon:SanitizeUnitToken(unit)
+    unit = self:SafeString(unit, nil)
+    if not unit or unit == "" then return nil end
+    return unit
+end
+
 -- NPC ID extraction from GUID
 -- Format: Creature-0-xxxx-xxxx-xxxx-NPCID-SPAWNUID
 function addon:GetNPCIDFromGUID(guid)
-    if not guid or type(guid) ~= "string" or self:IsSecretValue(guid) then return nil end
+    guid = self:SafeString(guid, nil)
+    if not guid then return nil end
     local unitType, _, _, _, _, npcID = strsplit("-", guid)
     if unitType == "Creature" or unitType == "Vehicle" then
         return tonumber(npcID)
@@ -166,55 +274,83 @@ end
 
 -- Verify unit is an eligible attackable enemy/neutral creature (excludes players, pets, friendly NPCs, living unattackable NPCs, and critters)
 function addon:IsEligibleMobUnit(unit)
-    if not unit or not UnitExists(unit) then return false end
-    if UnitIsPlayer(unit) or UnitPlayerControlled(unit) then return false end
-    if UnitIsFriend("player", unit) then return false end
-    if not UnitIsDead(unit) and not UnitCanAttack("player", unit) then return false end
+    unit = self:SanitizeUnitToken(unit)
+    if not unit then return false end
+    if not self:SafeBool(UnitExists(unit), false) then return false end
+    if self:SafeBool(UnitIsPlayer(unit), false) or self:SafeBool(UnitPlayerControlled(unit), false) then return false end
+    if self:SafeBool(UnitIsFriend("player", unit), false) then return false end
+    if not self:SafeBool(UnitIsDead(unit), false) and not self:SafeBool(UnitCanAttack("player", unit), false) then return false end
     if self:SafeString(UnitCreatureType(unit), nil) == "Critter" then return false end
     return true
 end
 
--- Cache creature name and inspect metadata from a unit
+-- Cache creature name and inspect metadata from a unit when unrestricted by the WoW API
 function addon:CacheUnit(unit)
-    if not UnitExists(unit) then return end
-    local guid = UnitGUID(unit)
-    if not guid then return end
+    if self:IsInBattleground() then return end
+    unit = self:SanitizeUnitToken(unit)
+    if not unit or not self:IsEligibleMobUnit(unit) then return end
 
+    local guid = self:SafeString(UnitGUID(unit), nil)
     local npcID = self:GetNPCIDFromGUID(guid)
     if not npcID then return end
 
     local name = self:SafeString(UnitName(unit), nil)
+    local classification = self:SafeString(UnitClassification(unit), "normal")
+    local creatureType = self:SafeString(UnitCreatureType(unit), nil)
+    local level = self:SafeNumber(UnitLevel(unit), nil)
+
     if name and name ~= "" and name ~= "Unknown" then
         self.npcNameCache[npcID] = name
     end
 
     -- Store creature metadata in runtime cache
-    local classification = self:SafeString(UnitClassification(unit), "normal")
-    local creatureType = self:SafeString(UnitCreatureType(unit), nil)
-    local level = UnitLevel(unit)
-
     addon.unitMetaCache[npcID] = {
-        name = name,
-        level = level,
-        classification = classification,
-        creatureType = creatureType
+        name = name or self.npcNameCache[npcID],
+        level = level or (addon.unitMetaCache[npcID] and addon.unitMetaCache[npcID].level),
+        classification = classification or (addon.unitMetaCache[npcID] and addon.unitMetaCache[npcID].classification) or "normal",
+        creatureType = creatureType or (addon.unitMetaCache[npcID] and addon.unitMetaCache[npcID].creatureType),
     }
 
     -- Update database if mob exists, OR if it is an eligible attackable rare spawn (so sightings are recorded!)
     -- This prevents friendly NPCs, vendors, and questgivers from ever being added.
     local mapID, zoneName, coords, subZone = self:GetPlayerLocation()
     local isRare = (classification == "rare" or classification == "rareelite")
-    local isEligible = self:IsEligibleMobUnit(unit)
     local mobExists = self.db and self.db.zones and self.db.zones[mapID] and self.db.zones[mapID].mobs and self.db.zones[mapID].mobs[npcID]
 
-    if mobExists or (isRare and isEligible) then
+    if mobExists or isRare then
         self:UpdateUnitMeta(npcID, mapID, zoneName, name, level, classification, creatureType, coords, subZone)
+    end
+end
+
+-- Record a kill on a dead eligible creature when its GUID is accessible (deduplicated per corpse GUID)
+function addon:TryRecordUnitKill(unit)
+    if self:IsInBattleground() then return end
+    unit = self:SanitizeUnitToken(unit)
+    if not unit then return end
+    if not self:SafeBool(UnitExists(unit), false) then return end
+    if not self:SafeBool(UnitIsDead(unit), false) then return end
+    if not self:IsEligibleMobUnit(unit) then return end
+
+    local guid = self:SafeString(UnitGUID(unit), nil)
+    local npcID = self:GetNPCIDFromGUID(guid)
+    if not guid or not npcID then return end
+    if self.killedCorpseGUIDs[guid] then return end
+
+    self:MarkCorpseKilled(guid)
+    local mobName = self:SafeString(UnitName(unit), nil) or self.npcNameCache[npcID] or ("Creature " .. npcID)
+    local mapID, zoneName, coords, subZone = self:GetPlayerLocation()
+    self:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
+
+    local meta = self.unitMetaCache and self.unitMetaCache[npcID]
+    if meta then
+        self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, meta.level, meta.classification, meta.creatureType, coords, subZone)
     end
 end
 
 -- Parse textual money into copper
 function addon:ParseMoneyString(str)
-    if not str or type(str) ~= "string" then return 0 end
+    str = self:SafeString(str, nil)
+    if not str then return 0 end
     local gold = tonumber(str:match("(%d+)%s*[Gg]old") or str:match("(%d+)%s*[Gg]") or 0) or 0
     local silver = tonumber(str:match("(%d+)%s*[Ss]ilver") or str:match("(%d+)%s*[Ss]") or 0) or 0
     local copper = tonumber(str:match("(%d+)%s*[Cc]opper") or str:match("(%d+)%s*[Cc]") or 0) or 0
@@ -223,6 +359,7 @@ end
 
 -- Mark corpse as looted to prevent double-counting if window is re-opened
 function addon:MarkCorpseLooted(guid)
+    guid = self:SafeString(guid, nil)
     if not guid then return end
     if self.lootedCorpseGUIDs[guid] then return end
 
@@ -239,6 +376,7 @@ function addon:MarkCorpseLooted(guid)
 end
 
 function addon:MarkCorpseKilled(guid)
+    guid = self:SafeString(guid, nil)
     if not guid then return end
     if self.killedCorpseGUIDs[guid] then return end
 
@@ -255,6 +393,7 @@ end
 
 -- Mark corpse as harvested to prevent double-counting if harvest window is re-opened
 function addon:MarkCorpseHarvested(guid)
+    guid = self:SafeString(guid, nil)
     if not guid then return end
     if self.harvestedCorpseGUIDs[guid] then return end
 
@@ -272,7 +411,8 @@ end
 
 -- Process loot window contents
 function addon:ProcessLoot()
-    local numItems = GetNumLootItems()
+    if self:IsInBattleground() then return end
+    local numItems = self:SafeNumber(GetNumLootItems(), 0) or 0
 
     -- Check if this loot opening is the result of a profession gathering cast
     local isProfessionHarvest = false
@@ -285,43 +425,47 @@ function addon:ProcessLoot()
         harvestProf = addon.activeGatherCast.profession
     end
 
-    -- 1. Identify source creature GUID
+    -- 1. Identify source creature GUID and NPC ID
     local sourceGUID = nil
+    local npcID = nil
 
     if GetLootSourceInfo and numItems > 0 then
         for i = 1, numItems do
-            local guid = GetLootSourceInfo(i)
+            local ok, rawGuid = pcall(GetLootSourceInfo, i)
+            local guid = ok and self:SafeString(rawGuid, nil) or nil
             if guid and self:GetNPCIDFromGUID(guid) then
                 sourceGUID = guid
+                npcID = self:GetNPCIDFromGUID(guid)
                 break
             end
         end
     end
 
-    if not sourceGUID and isProfessionHarvest and addon.recentProfessionHarvest and addon.recentProfessionHarvest.targetGUID then
-        if self:GetNPCIDFromGUID(addon.recentProfessionHarvest.targetGUID) then
-            sourceGUID = addon.recentProfessionHarvest.targetGUID
+    if not npcID and isProfessionHarvest and addon.recentProfessionHarvest and addon.recentProfessionHarvest.targetGUID then
+        local profGuid = self:SafeString(addon.recentProfessionHarvest.targetGUID, nil)
+        if profGuid and self:GetNPCIDFromGUID(profGuid) then
+            sourceGUID = profGuid
+            npcID = self:GetNPCIDFromGUID(profGuid)
         end
     end
 
-    if not sourceGUID and UnitExists("target") and UnitIsDead("target") then
-        local targetGUID = UnitGUID("target")
-        if self:GetNPCIDFromGUID(targetGUID) then
-            sourceGUID = targetGUID
+    if not npcID and self:SafeBool(UnitExists("target"), false) and self:SafeBool(UnitIsDead("target"), false) then
+        local tGuid = self:SafeString(UnitGUID("target"), nil)
+        if tGuid and self:GetNPCIDFromGUID(tGuid) then
+            sourceGUID = tGuid
+            npcID = self:GetNPCIDFromGUID(tGuid)
         end
     end
 
-    if not sourceGUID and UnitExists("mouseover") and UnitIsDead("mouseover") then
-        local moGUID = UnitGUID("mouseover")
-        if self:GetNPCIDFromGUID(moGUID) then
-            sourceGUID = moGUID
+    if not npcID and self:SafeBool(UnitExists("mouseover"), false) and self:SafeBool(UnitIsDead("mouseover"), false) then
+        local moGuid = self:SafeString(UnitGUID("mouseover"), nil)
+        if moGuid and self:GetNPCIDFromGUID(moGuid) then
+            sourceGUID = moGuid
+            npcID = self:GetNPCIDFromGUID(moGuid)
         end
     end
 
-    if not sourceGUID then return end
-
-    local npcID = self:GetNPCIDFromGUID(sourceGUID)
-    if not npcID then return end
+    if not sourceGUID or not npcID then return end
 
     -- Check duplicate loot window opens
     if isProfessionHarvest then
@@ -336,22 +480,57 @@ function addon:ProcessLoot()
         self:MarkCorpseLooted(sourceGUID)
     end
 
-    -- 2. Resolve mob display name
+    -- 2. Resolve mob display name (and corpse unit token for metadata fallback if UnitGUID was restricted)
     local mobName = nil
-    if UnitExists("target") and UnitGUID("target") == sourceGUID then
-        mobName = self:SafeString(UnitName("target"), nil)
-    elseif UnitExists("mouseover") and UnitGUID("mouseover") == sourceGUID then
-        mobName = self:SafeString(UnitName("mouseover"), nil)
+    local corpseUnit = nil
+    if self:SafeBool(UnitExists("target"), false) then
+        local targetGUID = self:SafeString(UnitGUID("target"), nil)
+        if targetGUID and targetGUID == sourceGUID then
+            mobName = self:SafeString(UnitName("target"), nil)
+            corpseUnit = "target"
+        end
+    end
+    if not mobName and self:SafeBool(UnitExists("mouseover"), false) then
+        local moGUID = self:SafeString(UnitGUID("mouseover"), nil)
+        if moGUID and moGUID == sourceGUID then
+            mobName = self:SafeString(UnitName("mouseover"), nil)
+            corpseUnit = "mouseover"
+        end
     end
 
     if not mobName or mobName == "" then
         mobName = self:SafeString(self.npcNameCache[npcID], nil)
     end
 
+    -- Fallback when UnitGUID("mouseover") / UnitGUID("target") is restricted in dungeons while looting a dead corpse
+    if not corpseUnit then
+        if self:IsEligibleMobUnit("mouseover") and self:SafeBool(UnitIsDead("mouseover"), false) then
+            corpseUnit = "mouseover"
+        elseif self:IsEligibleMobUnit("target") and self:SafeBool(UnitIsDead("target"), false) then
+            corpseUnit = "target"
+        end
+    end
+    if (not mobName or mobName == "") and corpseUnit then
+        local fallbackName = self:SafeString(UnitName(corpseUnit), nil)
+        if fallbackName and fallbackName ~= "" and fallbackName ~= "Unknown" then
+            mobName = fallbackName
+        end
+    end
+
     if not mobName or mobName == "" then
         mobName = "Creature " .. npcID
     else
         self.npcNameCache[npcID] = mobName
+    end
+
+    -- Populate unitMetaCache from the looted corpse if UnitGUID was previously restricted
+    if corpseUnit and not self.unitMetaCache[npcID] then
+        self.unitMetaCache[npcID] = {
+            name = mobName,
+            level = self:SafeNumber(UnitLevel(corpseUnit), nil),
+            classification = self:SafeString(UnitClassification(corpseUnit), "normal"),
+            creatureType = self:SafeString(UnitCreatureType(corpseUnit), nil),
+        }
     end
 
     -- 3. Parse items and coins
@@ -362,19 +541,25 @@ function addon:ProcessLoot()
     local LOOT_ITEM = LOOT_SLOT_ITEM or 1
 
     for slot = 1, numItems do
-        local slotType = GetLootSlotType(slot)
+        local slotType = self:SafeNumber(GetLootSlotType(slot), nil)
 
         if slotType == LOOT_MONEY then
-            local _, name, quantity = GetLootSlotInfo(slot)
+            local _, rawName, rawQuantity = GetLootSlotInfo(slot)
+            local name = self:SafeString(rawName, nil)
+            local quantity = self:SafeNumber(rawQuantity, 0) or 0
             local parsed = self:ParseMoneyString(name)
             if parsed > 0 then
                 moneyCopper = moneyCopper + parsed
-            elseif quantity and quantity > 1 then
+            elseif quantity > 1 then
                 moneyCopper = moneyCopper + quantity
             end
         elseif slotType == LOOT_ITEM or slotType == 0 then
-            local icon, name, quantity, _, quality = GetLootSlotInfo(slot)
-            local itemLink = GetLootSlotLink(slot)
+            local rawIcon, rawName, rawQuantity, _, rawQuality = GetLootSlotInfo(slot)
+            local icon = self:SafeNumber(rawIcon, nil) or self:SafeString(rawIcon, nil)
+            local name = self:SafeString(rawName, nil)
+            local quantity = self:SafeNumber(rawQuantity, 1) or 1
+            local quality = self:SafeNumber(rawQuality, 1) or 1
+            local itemLink = self:SafeString(GetLootSlotLink(slot), nil)
             local itemID = nil
 
             if itemLink then
@@ -385,13 +570,13 @@ function addon:ProcessLoot()
                 if not itemsLooted[itemID] then
                     itemsLooted[itemID] = {
                         name = name or ("Item " .. itemID),
-                        quality = quality or 1,
+                        quality = quality,
                         icon = icon,
                         itemLink = itemLink,
                         quantity = 0
                     }
                 end
-                itemsLooted[itemID].quantity = itemsLooted[itemID].quantity + (quantity or 1)
+                itemsLooted[itemID].quantity = itemsLooted[itemID].quantity + quantity
             end
         end
     end
@@ -405,6 +590,7 @@ function addon:ProcessLoot()
         addon.activeGatherCast = nil
     else
         self:RecordLoot(mapID, zoneName, npcID, mobName, itemsLooted, moneyCopper, coords, subZone)
+
         if not self.killedCorpseGUIDs[sourceGUID] then
             self:MarkCorpseKilled(sourceGUID)
             self:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
@@ -440,16 +626,26 @@ eventFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 
 local isLoaded = false
-eventFrame:SetScript("OnEvent", function(self, event, ...)
+
+local function HandleCoreEvent(event, ...)
     if event == "ADDON_LOADED" then
-        local name = ...
+        local name = addon:SafeString(..., nil)
         if (name == ADDON_NAME or name == "AzerothCreatureCompendium" or name == "BgLootLogger") and not isLoaded then
             isLoaded = true
             addon:InitDatabase()
             addon:Print("Loaded. Type |cffffd100/acc|r for Compendium window or |cffffd100/acc options|r for settings.")
         end
-    elseif event == "UNIT_SPELLCAST_START" then
-        local unit, _, eventSpellID = ...
+        return
+    end
+
+    -- Do nothing inside PvP Battlegrounds and Arenas
+    if addon:IsInBattleground() then
+        return
+    end
+
+    if event == "UNIT_SPELLCAST_START" then
+        local rawUnit, _, eventSpellID = ...
+        local unit = addon:SanitizeUnitToken(rawUnit)
         if unit == "player" and eventSpellID then
             local spellID = eventSpellID
             if addon:IsSecretValue(spellID) then
@@ -457,7 +653,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 if not castID then _, _, _, _, _, _, _, castID = UnitChannelInfo(unit) end
                 spellID = castID
             end
-            if not spellID or addon:IsSecretValue(spellID) then return end
+            spellID = addon:SafeNumber(spellID, nil)
+            if not spellID then return end
 
             local prof = addon:IdentifyGatheringSpell(spellID)
             if prof then
@@ -465,23 +662,22 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                     profession = prof,
                     spellID = spellID,
                     time = GetTime(),
-                    targetGUID = UnitGUID("target") or UnitGUID("mouseover")
+                    targetGUID = addon:SafeString(UnitGUID("target"), nil) or addon:SafeString(UnitGUID("mouseover"), nil)
                 }
             end
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        local unit, _, eventSpellID = ...
+        local rawUnit, _, eventSpellID = ...
+        local unit = addon:SanitizeUnitToken(rawUnit)
         if unit == "player" and eventSpellID then
-            local spellID = eventSpellID
-            if addon:IsSecretValue(spellID) then
-                -- Can't fetch from UnitCastingInfo since it's already succeeded/finished
-                spellID = nil
-            end
+            local spellID = addon:SafeNumber(eventSpellID, nil)
             if not spellID and not addon.activeGatherCast then return end
 
             local prof = addon:IdentifyGatheringSpell(spellID) or (addon.activeGatherCast and addon.activeGatherCast.profession)
             if prof then
-                local targetGUID = (addon.activeGatherCast and addon.activeGatherCast.targetGUID) or UnitGUID("target") or UnitGUID("mouseover")
+                local targetGUID = (addon.activeGatherCast and addon.activeGatherCast.targetGUID)
+                    or addon:SafeString(UnitGUID("target"), nil)
+                    or addon:SafeString(UnitGUID("mouseover"), nil)
                 addon.recentProfessionHarvest = {
                     profession = prof,
                     spellID = spellID or (addon.activeGatherCast and addon.activeGatherCast.spellID),
@@ -492,12 +688,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_FAILED" then
-        local unit = ...
+        local unit = addon:SanitizeUnitToken(...)
         if unit == "player" then
             addon.activeGatherCast = nil
         end
     elseif event == "CHAT_MSG_MONEY" then
-        local msg = ...
+        local msg = addon:SafeString(..., nil)
         if msg and addon.lastLootedMob and (GetTime() - addon.lastLootedMob.time) < 2.5 then
             local copper = addon:ParseMoneyString(msg)
             if copper > 0 and not addon.lastLootedMob.moneyRecorded then
@@ -516,10 +712,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
     elseif event == "PLAYER_TARGET_CHANGED" then
         addon:CacheUnit("target")
+        addon:TryRecordUnitKill("target")
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         addon:CacheUnit("mouseover")
     elseif event == "NAME_PLATE_UNIT_ADDED" then
-        local unit = ...
+        local unit = addon:SanitizeUnitToken(...)
         if unit then
             addon:CacheUnit(unit)
         end
@@ -531,4 +728,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "LOOT_CLOSED" then
         addon.isProcessingLoot = false
     end
+end
+
+eventFrame:SetScript("OnEvent", function(_, event, ...)
+    addon:SafeCall(HandleCoreEvent, event, ...)
 end)

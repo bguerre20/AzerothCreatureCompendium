@@ -11,14 +11,28 @@
 1. **Journey Before Destination:** This addon serves as an in-game personal journal and compendium that dynamically discovers mob data as the player explores, fights, and loots. It does NOT pre-populate full world drop tables.
 2. **Zero-Taint Execution:** Never subscribe to restricted combat log streams (`COMBAT_LOG_EVENT_UNFILTERED`) or hook protected action buttons. All discovery must use public, unrestricted unit and UI events (`UNIT_SPELLCAST_*`, `UI_ERROR_MESSAGE`, `LOOT_OPENED`, etc.) to prevent combat action taint in Classic raids and PvP.
 3. **Single Source of Truth:** Technical architecture, sequence flows, database schemas, and module interfaces are centralized in **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**. Never create separate redundant architecture files.
+4. **No Activity in Battlegrounds:** The addon must remain completely inactive inside PvP battlegrounds and arenas (`instanceType == "pvp"` or `"arena"`). Do not process unit events, combat casts, or tooltips in battlegrounds.
+5. **Simplicity & Strict Blizzard API / ToS Compliance (No Fragile Workarounds):** Never build convoluted, fragile workarounds to bypass Blizzard API restrictions (such as secret-value sandboxing inside instances) that could break in future client patches or approach Terms of Service boundaries. When the WoW API restricts access in a given context, respect that boundary cleanly.
+6. **Predictable Fail-Safe UX & Toggleable Debug Mode:** In normal player mode (`debugMode == false`, the default), the addon must never throw unhandled Lua errors when encountering restricted APIs; instead, it must fail silently and predictably (for example, showing a brief tooltip notice such as *"Unable to retrieve information due to WoW API restrictions"* and noting instance limitations in the Settings panel). When `debugMode == true`, allow real Lua errors and diagnostics to surface for developer troubleshooting.
+
+---
+
+## 🔍 MANDATORY PROTOCOL: Investigate -> Propose -> Discuss -> Implement
+
+**Never jump straight into editing code or deploying when given a bug report, defect, or ambiguous feature request.** You MUST follow this 4-step collaborative workflow:
+
+1. **Deep-Dive Investigation (Read-Only):** Inspect the relevant files, stack traces, and WoW API documentation to determine the exact root cause and constraints. Do **not** modify any files during this phase.
+2. **Propose Options & Trade-Offs:** Present a clear summary of why the issue is happening along with 1–3 concrete solution options. Explicitly call out complexity, edge cases, API restriction boundaries, and maintenance trade-offs.
+3. **Back-and-Forth Discussion:** Discuss the options with the user and align on the exact approach first.
+4. **Implementation (Only After Explicit User Approval):** Only begin editing Lua/markdown files, creating commits, or running `deploy.ps1` after the user confirms which solution to implement.
 
 ---
 
 ## 🤖 Specialist Agent Pipeline (`wow-addon-studio`)
 
 This repository uses the global **`wow-addon-studio`** plugin pipeline. Activate the matching specialist skill/subagent for each phase of work:
-1. **Requirements & Design (`wow-spec-architect`):** Use when brainstorming, gathering requirements, or designing a new feature/bugfix spec before coding.
-2. **Implementation & Local Deploy (`wow-addon-engineer`):** Use when writing Lua code on a dedicated branch, enforcing zero-taint/secret-value safety, syncing `docs/ARCHITECTURE.md`, and running `lint.ps1` + `deploy.ps1`.
+1. **Requirements, Root-Cause Investigation & Design (`wow-spec-architect`):** Use FIRST when investigating a bug/defect, brainstorming, gathering requirements, or proposing solutions for user discussion before any code is written.
+2. **Implementation & Local Deploy (`wow-addon-engineer`):** Use ONLY AFTER the user has approved a solution/spec to write Lua code on a dedicated branch, enforce zero-taint/secret-value safety, sync `docs/ARCHITECTURE.md`, and run `lint.ps1` + `deploy.ps1`.
 3. **Branch Closeout & CurseForge Release (`wow-release-engineer`):** Use after in-game testing to audit `.pkgmeta`/`README.md`, merge/prune branches, author player-centric `CHANGELOG.md` notes, and push annotated `vX.Y.Z` tags.
 
 ---
@@ -66,6 +80,13 @@ Before declaring any task complete or submitting a pull request, you **MUST** ru
   5. `Tooltip.lua` (sidecar frames)
   6. `CompendiumWindow.lua` (Pokédex UI & minimap button)
   7. `Options.lua` (Blizzard settings)
+
+### 6. Battleground Inactivity Guard
+- Always check whether the player is in a battleground or arena (`instanceType == "pvp"` or `"arena"`) and exit early. The addon must do nothing in battlegrounds.
+
+### 7. Graceful Restriction Handling & Debug Mode
+- Never use fragile or ToS-questionable workarounds to circumvent Blizzard API restrictions in instances.
+- Guard restricted API boundaries so normal users never see raw Lua errors (displaying a clean tooltip restriction notice when data cannot be read), while allowing full error visibility when `debugMode` is enabled.
 
 ---
 

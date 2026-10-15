@@ -98,8 +98,11 @@ read_globals = {
     "UnitPlayerControlled",
     "UnitHealth",
     "UnitHealthMax",
+    "UnitAffectingCombat",
     "UnitCastingInfo",
     "UnitChannelInfo",
+    "GetInstanceInfo",
+    "IsInInstance",
     "GetSubZoneText",
     "GetMinimapZoneText",
     "GetRealZoneText",
@@ -146,5 +149,6 @@ read_globals = {
 
     -- Modern & Security Globals
     "issecretvalue",
+    "issecrettable",
     "InCombatLockdown",
 }

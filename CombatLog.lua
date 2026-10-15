@@ -106,8 +106,13 @@ combatFrame:RegisterEvent("UI_ERROR_MESSAGE")
 combatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
-combatFrame:SetScript("OnEvent", function(self, event, ...)
+local function HandleCombatEvent(event, ...)
     if not addon.db or not addon.db.settings or not addon.db.settings.trackCombat then
+        return
+    end
+
+    -- Do nothing inside PvP Battlegrounds and Arenas
+    if addon:IsInBattleground() then
         return
     end
 
@@ -115,8 +120,9 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 1. Unit Spellcast Tracking (Enemy Casts)
     ---------------------------------------------------------------------------
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local unit, _, eventSpellID = ...
-        if unit and UnitExists(unit) and UnitCanAttack("player", unit) then
+        local rawUnit, _, eventSpellID = ...
+        local unit = addon:SanitizeUnitToken(rawUnit)
+        if unit and addon:IsEligibleMobUnit(unit) and addon:SafeBool(UnitCanAttack("player", unit), false) then
             local spellID = eventSpellID
 
             -- Blizzard's secret value system obfuscates combat payload data.
@@ -135,16 +141,13 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
             end
 
             -- If it's STILL secret (or missing), record a single placeholder ability
-            if not spellID or addon:IsSecretValue(spellID) then
-                spellID = -1
-            end
+            spellID = addon:SafeNumber(spellID, -1) or -1
 
-            local guid = UnitGUID(unit)
+            local guid = addon:SafeString(UnitGUID(unit), nil)
             local npcID = addon:GetNPCIDFromGUID(guid)
-            spellID = tonumber(spellID)
 
             if npcID and spellID then
-                local mobName = addon:SafeString(UnitName(unit), "Creature " .. npcID)
+                local mobName = addon:SafeString(UnitName(unit), nil) or addon.npcNameCache[npcID] or ("Creature " .. npcID)
                 local mapID, zoneName, _, subZone = addon:GetPlayerLocation()
 
                 local spellName, spellTexture
@@ -173,7 +176,8 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 2. Player Spell Sent (To associate with "Target is immune" errors)
     ---------------------------------------------------------------------------
     elseif event == "UNIT_SPELLCAST_SENT" then
-        local unit, _, _, eventSpellID = ...
+        local rawUnit, _, _, eventSpellID = ...
+        local unit = addon:SanitizeUnitToken(rawUnit)
         if unit == "player" and eventSpellID then
             local spellID = eventSpellID
             if addon:IsSecretValue(spellID) then
@@ -181,7 +185,8 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
                 if not castID then _, _, _, _, _, _, _, castID = UnitChannelInfo(unit) end
                 spellID = castID
             end
-            if not spellID or addon:IsSecretValue(spellID) then return end
+            spellID = addon:SafeNumber(spellID, nil)
+            if not spellID then return end
 
             local spellName = addon:ResolveSpellInfo(spellID)
 
@@ -201,11 +206,11 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
         local lowerMsg = string.lower(safeMsg)
 
         if string.find(lowerMsg, "immune", 1, true) then
-            if UnitExists("target") and UnitCanAttack("player", "target") then
-                local guid = UnitGUID("target")
+            if addon:IsEligibleMobUnit("target") and addon:SafeBool(UnitCanAttack("player", "target"), false) then
+                local guid = addon:SafeString(UnitGUID("target"), nil)
                 local npcID = addon:GetNPCIDFromGUID(guid)
                 if npcID then
-                    local mobName = addon:SafeString(UnitName("target"), "Creature " .. npcID)
+                    local mobName = addon:SafeString(UnitName("target"), nil) or addon.npcNameCache[npcID] or ("Creature " .. npcID)
                     local mapID, zoneName, _, subZone = addon:GetPlayerLocation()
 
                     -- Check what spell player recently cast
@@ -231,21 +236,17 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 4. Target Death & Kill Tracking
     ---------------------------------------------------------------------------
     elseif event == "PLAYER_TARGET_CHANGED" then
-        if UnitExists("target") and UnitIsDead("target") and UnitCanAttack("player", "target") then
-            local guid = UnitGUID("target")
-            local npcID = addon:GetNPCIDFromGUID(guid)
-            if npcID and not addon.killedCorpseGUIDs[guid] then
-                local mobName = addon:SafeString(UnitName("target"), "Creature " .. npcID)
-                local mapID, zoneName, coords, subZone = addon:GetPlayerLocation()
-                addon:MarkCorpseKilled(guid)
-                addon:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
-            end
-        end
+        addon:TryRecordUnitKill("target")
 
     ---------------------------------------------------------------------------
-    -- 5. Out of Combat: Resolve Deferred Spells
+    -- 5. Out of Combat: Resolve Deferred Spells & Finalize Target Kills
     ---------------------------------------------------------------------------
     elseif event == "PLAYER_REGEN_ENABLED" then
         addon:ProcessPendingSpellResolutions()
+        addon:TryRecordUnitKill("target")
     end
+end
+
+combatFrame:SetScript("OnEvent", function(_, event, ...)
+    addon:SafeCall(HandleCombatEvent, event, ...)
 end)
