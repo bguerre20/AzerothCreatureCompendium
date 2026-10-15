@@ -469,8 +469,17 @@ end
 function addon:OnTooltipSetUnit(tooltip, data)
     if not tooltip or not self.db then return end
 
-    local _, unit = tooltip:GetUnit()
-    if not unit and UnitExists("mouseover") then
+    local rawName, rawUnit
+    if tooltip.GetUnit then
+        local ok, n, u = pcall(tooltip.GetUnit, tooltip)
+        if ok then
+            rawName = self:SafeString(n, nil)
+            rawUnit = self:SanitizeUnitToken(u)
+        end
+    end
+
+    local unit = rawUnit
+    if not unit and self:SafeBool(UnitExists("mouseover"), false) then
         unit = "mouseover"
     end
 
@@ -481,29 +490,17 @@ function addon:OnTooltipSetUnit(tooltip, data)
         return
     end
 
-    local guid = UnitGUID(unit)
-    if not guid and data and data.guid then
-        guid = data.guid
+    local guid, npcID, unitName = self:ResolveUnitIdentity(unit, rawName)
+    if not guid and data and not self:IsSecretValue(data) and data.guid then
+        guid = self:SafeString(data.guid, nil)
+        if not npcID and guid then
+            npcID = self:GetNPCIDFromGUID(guid)
+        end
     end
 
-    if not guid then
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
-        return
-    end
-
-    local npcID = self:GetNPCIDFromGUID(guid)
-    if not npcID then
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
-        return
-    end
-
-    -- Fetch recorded creature data
-    local mapID = C_Map.GetBestMapForUnit("player") or 0
-    local mob = self:GetMobData(npcID, mapID)
+    -- Fetch recorded creature data using instance-aware zone/dungeon location
+    local mapID = self:GetPlayerLocation()
+    local mob = npcID and self:GetMobData(npcID, mapID) or nil
 
     if not mob and self.db.settings.showNewMobTooltip == false then
         lootTooltip:Hide()
@@ -512,14 +509,6 @@ function addon:OnTooltipSetUnit(tooltip, data)
         return
     end
 
-    -- Resolve creature name
-    local unitName = (unit and UnitExists(unit) and self:SafeString(UnitName(unit), nil))
-    if not unitName and tooltip.GetUnit then
-        local ok, tipName = pcall(function() return select(1, tooltip:GetUnit()) end)
-        if ok and tipName then
-            unitName = self:SafeString(tipName, nil)
-        end
-    end
     unitName = unitName or (mob and mob.name) or "Creature"
 
     local showLoot = self:IsLootModActive()
@@ -655,24 +644,33 @@ modWatcher:SetScript("OnEvent", function(self, event)
         return
     end
 
-    local _, unit = GameTooltip:GetUnit()
-    if not unit and UnitExists("mouseover") then
+    local rawName, rawUnit
+    if GameTooltip.GetUnit then
+        local ok, n, u = pcall(GameTooltip.GetUnit, GameTooltip)
+        if ok then
+            rawName = addon:SafeString(n, nil)
+            rawUnit = addon:SanitizeUnitToken(u)
+        end
+    end
+
+    local unit = rawUnit
+    if not unit and addon:SafeBool(UnitExists("mouseover"), false) then
         unit = "mouseover"
     end
 
     if addon:IsEligibleMobUnit(unit) then
-        local guid = UnitGUID(unit)
-        local npcID = addon:GetNPCIDFromGUID(guid)
-        if not npcID then
+        local _, npcID, unitName = addon:ResolveUnitIdentity(unit, rawName)
+        local mapID = addon:GetPlayerLocation()
+        local mob = npcID and addon:GetMobData(npcID, mapID) or nil
+
+        if not mob and addon.db and addon.db.settings and addon.db.settings.showNewMobTooltip == false then
             lootTooltip:Hide()
             combatTooltip:Hide()
             professionTooltip:Hide()
             return
         end
 
-        local mapID = C_Map.GetBestMapForUnit("player") or 0
-        local mob = addon:GetMobData(npcID, mapID)
-        local unitName = addon:SafeString(UnitName(unit), (mob and mob.name) or "Creature")
+        unitName = unitName or (mob and mob.name) or "Creature"
 
         if addon:IsEmbeddedLayout() then
             if not addon.isRefreshingTip then
