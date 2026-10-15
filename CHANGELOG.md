@@ -1,5 +1,12 @@
 # Azeroth Creature Compendium
 
+## v0.10.5-beta (2026-10-15)
+- Fixed a Lua error when hovering over creatures inside dungeons and battlegrounds.
+- Disabled all addon activity while inside PvP battlegrounds and arenas.
+- Added dungeon zone detection so creatures looted inside dungeons are recorded under the dungeon name instead of Unknown Zone.
+- Added a tooltip notice when WoW addon API restrictions block unit information inside instances.
+- Added a fail-safe mode that suppresses unexpected API restriction errors by default, with a Debug Mode toggle in the Options panel and `/acc debug` slash command.
+
 ## v0.10.4-beta (2026-10-14)
 - Fixed the minimap button appearing as a blank white circle when used with minimap addons such as Leatrix Plus and MinimapButtonBag.
 - Added support for square minimaps and LibDataBroker display bars.
