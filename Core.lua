@@ -272,6 +272,20 @@ function addon:GetNPCIDFromGUID(guid)
     return nil
 end
 
+-- Check if a unit is dead via UnitIsDead/UnitIsDeadOrGhost or zero health (catches UNIT_HEALTH before flag flip)
+function addon:IsUnitDead(unit)
+    unit = self:SanitizeUnitToken(unit)
+    if not unit then return false end
+    if self:SafeBool(UnitIsDead(unit), false) then return true end
+    if UnitIsDeadOrGhost and self:SafeBool(UnitIsDeadOrGhost(unit), false) then return true end
+    local maxHp = self:SafeNumber(UnitHealthMax(unit), nil)
+    local hp = self:SafeNumber(UnitHealth(unit), nil)
+    if maxHp and maxHp > 0 and hp and hp <= 0 then
+        return true
+    end
+    return false
+end
+
 -- Verify unit is an eligible attackable enemy/neutral creature (excludes players, pets, friendly NPCs, living unattackable NPCs, and critters)
 function addon:IsEligibleMobUnit(unit)
     unit = self:SanitizeUnitToken(unit)
@@ -279,7 +293,7 @@ function addon:IsEligibleMobUnit(unit)
     if not self:SafeBool(UnitExists(unit), false) then return false end
     if self:SafeBool(UnitIsPlayer(unit), false) or self:SafeBool(UnitPlayerControlled(unit), false) then return false end
     if self:SafeBool(UnitIsFriend("player", unit), false) then return false end
-    if not self:SafeBool(UnitIsDead(unit), false) and not self:SafeBool(UnitCanAttack("player", unit), false) then return false end
+    if not self:IsUnitDead(unit) and not self:SafeBool(UnitCanAttack("player", unit), false) then return false end
     if self:SafeString(UnitCreatureType(unit), nil) == "Critter" then return false end
     return true
 end
@@ -328,8 +342,9 @@ function addon:TryRecordUnitKill(unit)
     unit = self:SanitizeUnitToken(unit)
     if not unit then return end
     if not self:SafeBool(UnitExists(unit), false) then return end
-    if not self:SafeBool(UnitIsDead(unit), false) then return end
+    if not self:IsUnitDead(unit) then return end
     if not self:IsEligibleMobUnit(unit) then return end
+    if UnitIsTapDenied and self:SafeBool(UnitIsTapDenied(unit), false) then return end
 
     local guid = self:SafeString(UnitGUID(unit), nil)
     local npcID = self:GetNPCIDFromGUID(guid)
@@ -342,9 +357,10 @@ function addon:TryRecordUnitKill(unit)
     self:RecordKill(mapID, zoneName, npcID, mobName, coords, subZone)
 
     local meta = self.unitMetaCache and self.unitMetaCache[npcID]
-    if meta then
-        self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, meta.level, meta.classification, meta.creatureType, coords, subZone)
-    end
+    local level = (meta and meta.level) or self:SafeNumber(UnitLevel(unit), nil)
+    local classification = (meta and meta.classification) or self:SafeString(UnitClassification(unit), "normal")
+    local creatureType = (meta and meta.creatureType) or self:SafeString(UnitCreatureType(unit), nil)
+    self:UpdateUnitMeta(npcID, mapID, zoneName, mobName, level, classification, creatureType, coords, subZone)
 end
 
 -- Parse textual money into copper
@@ -622,6 +638,8 @@ eventFrame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 eventFrame:RegisterEvent("UNIT_SPELLCAST_FAILED")
 eventFrame:RegisterEvent("CHAT_MSG_MONEY")
 eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+eventFrame:RegisterEvent("UNIT_HEALTH")
+eventFrame:RegisterEvent("UNIT_FLAGS")
 eventFrame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 eventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 
@@ -713,6 +731,11 @@ local function HandleCoreEvent(event, ...)
     elseif event == "PLAYER_TARGET_CHANGED" then
         addon:CacheUnit("target")
         addon:TryRecordUnitKill("target")
+    elseif event == "UNIT_HEALTH" or event == "UNIT_FLAGS" then
+        local unit = addon:SanitizeUnitToken(...)
+        if unit == "target" then
+            addon:TryRecordUnitKill("target")
+        end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         addon:CacheUnit("mouseover")
     elseif event == "NAME_PLATE_UNIT_ADDED" then

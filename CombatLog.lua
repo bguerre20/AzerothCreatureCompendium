@@ -103,7 +103,6 @@ combatFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 combatFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
 combatFrame:RegisterEvent("UNIT_SPELLCAST_SENT")
 combatFrame:RegisterEvent("UI_ERROR_MESSAGE")
-combatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 local function HandleCombatEvent(event, ...)
@@ -233,13 +232,7 @@ local function HandleCombatEvent(event, ...)
         end
 
     ---------------------------------------------------------------------------
-    -- 4. Target Death & Kill Tracking
-    ---------------------------------------------------------------------------
-    elseif event == "PLAYER_TARGET_CHANGED" then
-        addon:TryRecordUnitKill("target")
-
-    ---------------------------------------------------------------------------
-    -- 5. Out of Combat: Resolve Deferred Spells & Finalize Target Kills
+    -- 4. Out of Combat: Resolve Deferred Spells & Finalize Target Kills
     ---------------------------------------------------------------------------
     elseif event == "PLAYER_REGEN_ENABLED" then
         addon:ProcessPendingSpellResolutions()

@@ -93,6 +93,8 @@ read_globals = {
     "UnitReaction",
     "UnitCanAttack",
     "UnitIsDead",
+    "UnitIsDeadOrGhost",
+    "UnitIsTapDenied",
     "UnitIsFriend",
     "UnitIsPlayer",
     "UnitPlayerControlled",
