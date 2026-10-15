@@ -480,18 +480,21 @@ function addon:ProcessLoot()
         self:MarkCorpseLooted(sourceGUID)
     end
 
-    -- 2. Resolve mob display name
+    -- 2. Resolve mob display name (and corpse unit token for metadata fallback if UnitGUID was restricted)
     local mobName = nil
+    local corpseUnit = nil
     if self:SafeBool(UnitExists("target"), false) then
         local targetGUID = self:SafeString(UnitGUID("target"), nil)
         if targetGUID and targetGUID == sourceGUID then
             mobName = self:SafeString(UnitName("target"), nil)
+            corpseUnit = "target"
         end
     end
     if not mobName and self:SafeBool(UnitExists("mouseover"), false) then
         local moGUID = self:SafeString(UnitGUID("mouseover"), nil)
         if moGUID and moGUID == sourceGUID then
             mobName = self:SafeString(UnitName("mouseover"), nil)
+            corpseUnit = "mouseover"
         end
     end
 
@@ -499,10 +502,35 @@ function addon:ProcessLoot()
         mobName = self:SafeString(self.npcNameCache[npcID], nil)
     end
 
+    -- Fallback when UnitGUID("mouseover") / UnitGUID("target") is restricted in dungeons while looting a dead corpse
+    if not corpseUnit then
+        if self:IsEligibleMobUnit("mouseover") and self:SafeBool(UnitIsDead("mouseover"), false) then
+            corpseUnit = "mouseover"
+        elseif self:IsEligibleMobUnit("target") and self:SafeBool(UnitIsDead("target"), false) then
+            corpseUnit = "target"
+        end
+    end
+    if (not mobName or mobName == "") and corpseUnit then
+        local fallbackName = self:SafeString(UnitName(corpseUnit), nil)
+        if fallbackName and fallbackName ~= "" and fallbackName ~= "Unknown" then
+            mobName = fallbackName
+        end
+    end
+
     if not mobName or mobName == "" then
         mobName = "Creature " .. npcID
     else
         self.npcNameCache[npcID] = mobName
+    end
+
+    -- Populate unitMetaCache from the looted corpse if UnitGUID was previously restricted
+    if corpseUnit and not self.unitMetaCache[npcID] then
+        self.unitMetaCache[npcID] = {
+            name = mobName,
+            level = self:SafeNumber(UnitLevel(corpseUnit), nil),
+            classification = self:SafeString(UnitClassification(corpseUnit), "normal"),
+            creatureType = self:SafeString(UnitCreatureType(corpseUnit), nil),
+        }
     end
 
     -- 3. Parse items and coins
