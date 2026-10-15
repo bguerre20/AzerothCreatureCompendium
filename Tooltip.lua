@@ -466,15 +466,35 @@ end
 -- Tooltip Unit Inspection Hooks
 -------------------------------------------------------------------------------
 
+local RESTRICTION_NOTICE = "|cff00ff96[Compendium]|r |cff888888Unable to retrieve information due to WoW API restrictions.|r"
+
+local function HideAllCompanionTooltips()
+    if lootTooltip then lootTooltip:Hide() end
+    if combatTooltip then combatTooltip:Hide() end
+    if professionTooltip then professionTooltip:Hide() end
+end
+
 function addon:OnTooltipSetUnit(tooltip, data)
     if not tooltip or not self.db then return end
 
+    -- Do nothing inside PvP Battlegrounds and Arenas
+    if self:IsInBattleground() then
+        HideAllCompanionTooltips()
+        return
+    end
+
     local rawName, rawUnit
+    local isRestricted = false
     if tooltip.GetUnit then
         local ok, n, u = pcall(tooltip.GetUnit, tooltip)
         if ok then
+            if self:IsSecretValue(u) or self:IsSecretValue(n) then
+                isRestricted = true
+            end
             rawName = self:SafeString(n, nil)
             rawUnit = self:SanitizeUnitToken(u)
+        else
+            isRestricted = true
         end
     end
 
@@ -483,29 +503,61 @@ function addon:OnTooltipSetUnit(tooltip, data)
         unit = "mouseover"
     end
 
-    if not self:IsEligibleMobUnit(unit) then
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
+    if not unit then
+        HideAllCompanionTooltips()
+        if isRestricted then
+            tooltip:AddLine(RESTRICTION_NOTICE)
+            tooltip:Show()
+        end
         return
     end
 
-    local guid, npcID, unitName = self:ResolveUnitIdentity(unit, rawName)
+    -- Ignore players, player pets, friendly NPCs, and critters
+    if self:SafeBool(UnitIsPlayer(unit), false)
+        or self:SafeBool(UnitPlayerControlled(unit), false)
+        or self:SafeBool(UnitIsFriend("player", unit), false)
+        or self:SafeString(UnitCreatureType(unit), nil) == "Critter" then
+        HideAllCompanionTooltips()
+        return
+    end
+
+    if not self:IsEligibleMobUnit(unit) then
+        HideAllCompanionTooltips()
+        return
+    end
+
+    local rawGuid = UnitGUID(unit)
+    if rawGuid ~= nil and self:IsSecretValue(rawGuid) then
+        isRestricted = true
+    end
+    local guid = self:SafeString(rawGuid, nil)
+
     if not guid and data and not self:IsSecretValue(data) and data.guid then
-        guid = self:SafeString(data.guid, nil)
-        if not npcID and guid then
-            npcID = self:GetNPCIDFromGUID(guid)
+        if self:IsSecretValue(data.guid) then
+            isRestricted = true
+        else
+            guid = self:SafeString(data.guid, nil)
         end
     end
 
+    local npcID = self:GetNPCIDFromGUID(guid)
+    if not npcID then
+        HideAllCompanionTooltips()
+        if isRestricted then
+            tooltip:AddLine(RESTRICTION_NOTICE)
+            tooltip:Show()
+        end
+        return
+    end
+
+    local unitName = self:SafeString(UnitName(unit), nil) or rawName
+
     -- Fetch recorded creature data using instance-aware zone/dungeon location
     local mapID = self:GetPlayerLocation()
-    local mob = npcID and self:GetMobData(npcID, mapID) or nil
+    local mob = self:GetMobData(npcID, mapID)
 
     if not mob and self.db.settings.showNewMobTooltip == false then
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
+        HideAllCompanionTooltips()
         return
     end
 
@@ -517,9 +569,7 @@ function addon:OnTooltipSetUnit(tooltip, data)
 
     -- Check if player selected Embedded layout mode (single merged tooltip)
     if self:IsEmbeddedLayout() then
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
+        HideAllCompanionTooltips()
 
         local hintText = self:GetTooltipHintText(showLoot, showCombat, showProf)
 
@@ -615,32 +665,42 @@ function addon:OnTooltipSetUnit(tooltip, data)
     self:UpdateCompanionTooltips(mob)
 end
 
+local function SafeInvokeTooltipSetUnit(tooltip, data)
+    local ok = addon:SafeCall(addon.OnTooltipSetUnit, addon, tooltip, data)
+    if not ok then
+        HideAllCompanionTooltips()
+        if tooltip and tooltip.AddLine then
+            pcall(function()
+                tooltip:AddLine(RESTRICTION_NOTICE)
+                tooltip:Show()
+            end)
+        end
+    end
+end
+
 -- Tooltip OnHide cleanup
 GameTooltip:HookScript("OnHide", function()
-    if lootTooltip then lootTooltip:Hide() end
-    if combatTooltip then combatTooltip:Hide() end
-    if professionTooltip then professionTooltip:Hide() end
+    HideAllCompanionTooltips()
 end)
 
 -- Register Tooltip PostCall / Script hook
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip, data)
-        addon:OnTooltipSetUnit(tooltip, data)
+        SafeInvokeTooltipSetUnit(tooltip, data)
     end)
 else
     GameTooltip:HookScript("OnTooltipSetUnit", function(tooltip)
-        addon:OnTooltipSetUnit(tooltip)
+        SafeInvokeTooltipSetUnit(tooltip)
     end)
 end
 
 -- Real-time Tooltip Refresh on Modifier Key State Changes
 local modWatcher = CreateFrame("Frame", "AzerothCompendiumModWatcher")
 modWatcher:RegisterEvent("MODIFIER_STATE_CHANGED")
-modWatcher:SetScript("OnEvent", function(self, event)
-    if not GameTooltip:IsShown() then
-        if lootTooltip then lootTooltip:Hide() end
-        if combatTooltip then combatTooltip:Hide() end
-        if professionTooltip then professionTooltip:Hide() end
+
+local function HandleModifierStateChanged()
+    if addon:IsInBattleground() or not GameTooltip:IsShown() then
+        HideAllCompanionTooltips()
         return
     end
 
@@ -659,14 +719,19 @@ modWatcher:SetScript("OnEvent", function(self, event)
     end
 
     if addon:IsEligibleMobUnit(unit) then
-        local _, npcID, unitName = addon:ResolveUnitIdentity(unit, rawName)
+        local guid = addon:SafeString(UnitGUID(unit), nil)
+        local npcID = addon:GetNPCIDFromGUID(guid)
+        if not npcID then
+            HideAllCompanionTooltips()
+            return
+        end
+
+        local unitName = addon:SafeString(UnitName(unit), nil) or rawName
         local mapID = addon:GetPlayerLocation()
-        local mob = npcID and addon:GetMobData(npcID, mapID) or nil
+        local mob = addon:GetMobData(npcID, mapID)
 
         if not mob and addon.db and addon.db.settings and addon.db.settings.showNewMobTooltip == false then
-            lootTooltip:Hide()
-            combatTooltip:Hide()
-            professionTooltip:Hide()
+            HideAllCompanionTooltips()
             return
         end
 
@@ -682,8 +747,10 @@ modWatcher:SetScript("OnEvent", function(self, event)
             addon:UpdateCompanionTooltips(mob, unitName)
         end
     else
-        lootTooltip:Hide()
-        combatTooltip:Hide()
-        professionTooltip:Hide()
+        HideAllCompanionTooltips()
     end
+end
+
+modWatcher:SetScript("OnEvent", function()
+    addon:SafeCall(HandleModifierStateChanged)
 end)

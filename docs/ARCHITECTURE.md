@@ -42,7 +42,7 @@ The following diagram illustrates the flow of data from native World of Warcraft
 graph TD
     subgraph WoW_Client["Blizzard World of Warcraft Client"]
         E_Life["ADDON_LOADED"]
-        E_Unit["PLAYER_TARGET_CHANGED<br/>UPDATE_MOUSEOVER_UNIT<br/>NAME_PLATE_UNIT_ADDED<br/>NAME_PLATE_UNIT_REMOVED<br/>UNIT_HEALTH / UNIT_FLAGS"]
+        E_Unit["PLAYER_TARGET_CHANGED<br/>UPDATE_MOUSEOVER_UNIT<br/>NAME_PLATE_UNIT_ADDED"]
         E_Cast["UNIT_SPELLCAST_START<br/>UNIT_SPELLCAST_SUCCEEDED<br/>UNIT_SPELLCAST_SENT<br/>PLAYER_REGEN_ENABLED"]
         E_Err["UI_ERROR_MESSAGE<br/>('Target is immune')"]
         E_Loot["LOOT_OPENED<br/>LOOT_READY<br/>LOOT_CLOSED"]
@@ -54,7 +54,7 @@ graph TD
     end
 
     subgraph Engine_Layer["Observation & Processing Engines"]
-        CORE["Core Engine (Core.lua)<br/>• Unit Cache & Identity Resolver<br/>• Dungeon & Zone Location Resolver<br/>• Kill, Loot & Harvest Correlator"]
+        CORE["Core Engine (Core.lua)<br/>• Battleground Inactivity Guard<br/>• Dungeon & Zone Location Resolver<br/>• Kill, Loot & Harvest Correlator"]
         COMBAT["Combat Engine (CombatLog.lua)<br/>• Taint-Free Spell Tracker<br/>• Immunity Inference Engine<br/>• Target Kill Tracker"]
     end
 
@@ -106,13 +106,13 @@ The addon is modularized across seven specialized Lua files plus the TOC manifes
 
 | Execution Order | File | Responsibility | Primary APIs / Exports |
 | :--- | :--- | :--- | :--- |
-| **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, secret value detection/sanitization, and slash command registries. | `addon:IsSecretValue()`, `addon:SafeString()`, `addon:SafeNumber()`, `addon:SafeBool()`, `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
+| **1** | [Config.lua](../Config.lua) | Global namespace initialization, dynamic TOC version resolution, constant definitions, color matrices, default preferences, secret value detection/sanitization, fail-safe `SafeCall()` / `debugMode` execution boundary, and slash command registries. | `addon:IsSecretValue()`, `addon:SafeString()`, `addon:SafeNumber()`, `addon:SafeBool()`, `addon:IsDebugMode()`, `addon:SafeCall()`, `addon.DEFAULT_SETTINGS`, `addon.QUALITY_HEX`, `addon.SCHOOL_MASKS`, `addon.IMMUNITY_COLORS` |
 | **2** | [Database.lua](../Database.lua) | State management, SavedVariables lifecycle, schema normalization, legacy DB and Unknown Zone auto-migration, drop-rate math, query helpers, rank calculations, research rank badge icon mappings, subzone tracking, secret value sanitization, on-demand deferred spell resolution, and demo data sanitization. | `addon:InitDatabase()`, `addon:GetOrCreateMob()`, `addon:RecordLoot()`, `addon:RecordProfessionLoot()`, `addon:RecordSpellCast()`, `addon:RecordImmunity()`, `addon:RecordSubZone()`, `addon:GetMobSubZones()`, `addon:FormatMobLocationString()`, `addon:GetMobData()`, `addon:GetMobResearchRank()` |
 | **3** | [CombatLog.lua](../CombatLog.lua) | Taint-free combat discovery engine. Observes spellcasts, deferred out-of-combat spell resolution, and correlates error notifications to detect school/mechanic immunities without accessing restricted combat logs. | `InferSpellSchool()`, `MatchMechanicByName()`, `addon:ProcessPendingSpellResolutions()`, `AzerothCompendiumCombatListenerFrame` |
-| **4** | [Core.lua](../Core.lua) | Master event listener, creature unit inspector, secret unit token sanitizer, pre-combat unit identity cache, dungeon/instance location resolver, hostile/attackable creature eligibility guard, unit death and corpse GUID kill tracking, profession harvest correlation, coin transaction parser, and safe spell info resolver. | `addon:SanitizeUnitToken()`, `addon:ResolveUnitIdentity()`, `addon:TryRecordUnitKill()`, `addon:MarkMobEngaged()`, `addon:ResolveSpellInfo()`, `addon:GetSpellName()`, `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IsEligibleMobUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
-| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`), secret unit token fallback to `"mouseover"`, hostile creature filtering, and toggleable first mob encounter discovery placeholders. | `addon:OnTooltipSetUnit()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
+| **4** | [Core.lua](../Core.lua) | Master event listener, battleground inactivity guard (`IsInBattleground()`), creature unit inspector, secret unit token sanitizer, dungeon/instance location resolver, hostile/attackable creature eligibility guard, corpse GUID kill tracking, profession harvest correlation, coin transaction parser, and safe spell info resolver. | `addon:IsInBattleground()`, `addon:SanitizeUnitToken()`, `addon:TryRecordUnitKill()`, `addon:ResolveSpellInfo()`, `addon:GetSpellName()`, `addon:ProcessLoot()`, `addon:CacheUnit()`, `addon:IsEligibleMobUnit()`, `addon:IdentifyGatheringSpell()`, `addon:GetPlayerLocation()`, `addon:GetNPCIDFromGUID()` |
+| **5** | [Tooltip.lua](../Tooltip.lua) | Dual tooltip layout engine: Dedicated Tri-sidecars (with dynamic Beside or Above/Below screen docking, and Main Tooltip vs Mouse Cursor anchoring) or single merged `GameTooltip` embedding with live modifier detection (`SHIFT`/`CTRL`/`ALT`/`ALWAYS`/`NEVER`), battleground early-exit, predictable API restriction notices, hostile creature filtering, and toggleable first mob encounter discovery placeholders. | `addon:OnTooltipSetUnit()`, `addon:FormatCoinString()`, `addon:UpdateCompanionTooltips()`, `addon:IsEmbeddedLayout()`, `addon:GetTooltipHintText()`, `AzerothCompendiumLootTooltip`, `AzerothCompendiumCombatTooltip`, `AzerothCompendiumProfessionTooltip` |
 | **6** | [CompendiumWindow.lua](../CompendiumWindow.lua) | Two-pane Pokédex browser (`/acc`). Features live search (by creature, zone, subzone, item, or spell), collapsible Zone tree (with hover tooltips for Bestiary Progression ranks and badge icons), 3D interactive model rendering with mouse drag rotation, tabbed metadata cards, Bestiary Progression Rank display with Blizzard medal/portrait badges, creature sub-location display ("Found in:"), and `LibDBIcon-1.0` / `LibDataBroker-1.1` compatible minimap button. | `addon:CreateCompendiumWindow()`, `addon:ToggleCompendiumWindow()`, `addon:CreateMinimapButton()`, `addon:RegisterDataBrokerLauncher()`, `addon:SetMinimapButtonShown()` |
-| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), and feature checkboxes. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
+| **7** | [Options.lua](../Options.lua) | Blizzard Interface Options integration (`Settings.RegisterCanvasLayoutCategory`), 5-mode activation button selectors (`SHIFT`, `CTRL`, `ALT`, `ALWAYS`, `NEVER`), layout mode buttons (`SIDECAR` vs `EMBEDDED`), anchor point buttons (`BLIZZARD` vs `CURSOR`), sidecar docking selectors (`HORIZONTAL` vs `VERTICAL`), feature and Debug Mode checkboxes, and instance/battleground restriction notice. | `addon:RefreshOptionsHotkeys()`, `addon:RefreshOptionsLayout()`, `addon:OpenOptions()` |
 
 ### Packaging & Release Manifests
 
@@ -194,8 +194,7 @@ sequenceDiagram
     %% Phase 3: Enemy Spell Tracking & Secret Value Handling
     Note over Client,Combat: Enemy Mob retaliates by casting a spell
     Client->>Combat: UNIT_SPELLCAST_START (unit, castGUID, spellID)
-    Combat->>Core: SanitizeUnitToken(unit) & ResolveUnitIdentity(unit)
-    Combat->>Core: ResolveSpellInfo(spellID)
+    Combat->>Core: SanitizeUnitToken(unit) & ResolveSpellInfo(spellID)
     alt Spell Name Restricted by Client (Secret String)
         Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, nil, 1, icon, subZone)
         Combat->>Combat: Queue spellID in pendingSpellResolutions
@@ -206,13 +205,6 @@ sequenceDiagram
         Combat->>Combat: InferSpellSchool(spellName)
         Combat->>DB: RecordSpellCast(mapID, zone, npcID, mobName, spellID, spellName, school, icon, subZone)
     end
-
-    %% Phase 4: Real-Time Unit Death Kill Tracking (Open World & Dungeons)
-    Note over Client,Core: Engaged or targeted creature reaches 0 HP
-    Client->>Core: UNIT_HEALTH / UNIT_FLAGS / PLAYER_TARGET_CHANGED
-    Core->>Core: TryRecordUnitKill(unit) -> check IsEligibleMobUnit & UnitIsDead
-    Core->>Core: Check kill deduplication cache (killedCorpseGUIDs)
-    Core->>DB: RecordKill(mapID, zone, npcID, mobName, coords, subZone)
 ```
 
 ---
@@ -271,9 +263,10 @@ sequenceDiagram
     participant DB as Database.lua
 
     Player->>BlizzardTT: Hovers mouse over Creature
-    BlizzardTT->>Tooltip: HookScript OnTooltipSetUnit
+    BlizzardTT->>Tooltip: HookScript OnTooltipSetUnit (via SafeCall)
     activate Tooltip
-    Tooltip->>Tooltip: Sanitize unit token (fallback to "mouseover" if secret)
+    Tooltip->>Tooltip: Early exit if IsInBattleground()
+    Tooltip->>Tooltip: Sanitize unit token (render restriction notice if blocked by secret value)
     Tooltip->>Tooltip: Verify attackable enemy creature (IsEligibleMobUnit) & extract NPC ID
     Tooltip->>DB: GetMobData(npcID, currentMapID)
     Note over Tooltip: Early exit if unrecorded and showNewMobTooltip == false
@@ -348,7 +341,8 @@ AzerothCreatureCompendiumDB
 │     ├── showSample: boolean
 │     ├── showMinimap: boolean
 │     ├── trackCombat: boolean
-│     └── trackImmunities: boolean
+│     ├── trackImmunities: boolean
+│     └── debugMode: boolean
 ├── npcToZones: map<npcID, map<mapID, true>> (Inverted index for O(1) cross-zone lookups)
 └── zones: map<mapID, ZoneObject>
       └── [mapID]:
@@ -401,11 +395,11 @@ AzerothCreatureCompendiumDB
 
 ### 1. Taint-Safe Event Listening over Combat Log Streaming
 - **Context:** In World of Warcraft Classic, addons that read restricted combat log channels or hook protected combat actions risk "tainting" the execution environment, causing game-breaking errors like `Action blocked by an addon`.
-- **Decision:** The compendium strictly avoids `COMBAT_LOG_EVENT_UNFILTERED`. Instead, it uses public, unrestricted unit event channels (`UNIT_SPELLCAST_START`, `UNIT_SPELLCAST_SENT`, `UNIT_HEALTH`, `UNIT_FLAGS`, `UI_ERROR_MESSAGE`, `PLAYER_TARGET_CHANGED`). This guarantees 100% taint immunity in dungeons, raids, and PvP.
+- **Decision:** The compendium strictly avoids `COMBAT_LOG_EVENT_UNFILTERED`. Instead, it uses public, unrestricted unit event channels (`UNIT_SPELLCAST_START`, `UNIT_SPELLCAST_SENT`, `UI_ERROR_MESSAGE`, `PLAYER_TARGET_CHANGED`). This guarantees 100% taint immunity in dungeons, raids, and PvP.
 
 ### 2. Memory-Bounded Ring Buffers for Deduplication
-- **Context:** Rapid looting, harvesting, and combat tracking during farming sessions could produce memory growth or double-count drops and kills if events fire repeatedly.
-- **Decision:** `lootedCorpseGUIDs`, `harvestedCorpseGUIDs`, `killedCorpseGUIDs`, and `engagedMobGUIDs` each utilize a FIFO ring buffer capped at 400 entries. Old entries are automatically pruned, keeping memory usage constant and lightweight.
+- **Context:** Rapid looting and harvesting during farming sessions could produce memory growth or double-count drops and kills if events fire repeatedly.
+- **Decision:** `lootedCorpseGUIDs`, `harvestedCorpseGUIDs`, and `killedCorpseGUIDs` each utilize a FIFO ring buffer capped at 400 entries. Old entries are automatically pruned, keeping memory usage constant and lightweight.
 
 ### 3. Strict Coordinate Recording Policy for Rare Spawns
 - **Context:** Recording coordinate breadcrumbs for every standard trash mob across Azeroth bloats the SavedVariables file with megabytes of redundant data.
@@ -423,13 +417,13 @@ AzerothCreatureCompendiumDB
 - **Context:** Unchecked Lua code easily introduces global variable pollution (e.g. omitting `local`), silent typos in handler names, and dead variables that complicate debugging and cause memory overhead. However, standard linters emit hundreds of false-positive warnings for World of Warcraft's global API surface.
 - **Decision:** Continuous integration enforces `luacheck` via `.github/workflows/lint.yml` against an authoritative [`.luacheckrc`](../.luacheckrc) configured specifically for WoW Classic. Developers and AI agents can validate changes locally using [lint.ps1](../lint.ps1). Zero warnings and zero errors are enforced.
 
-### 7. Secret Value & Taint-Safe Protection (WoW 11.0+ / 12.0+ Compatibility)
-- **Context:** In modern World of Warcraft engine builds (`11.0+` / `12.0+` / `16001`), Blizzard introduced a security sandbox where unit tokens (`tooltip:GetUnit()`), unit GUIDs, event payloads (`spellID`), and spell names (`C_Spell.GetSpellInfo`) frequently return "secret values" when queried inside instances (dungeons, raids, battlegrounds) or restricted combat contexts. Passing a secret string unit token into `UnitExists(unit)` throws `bad argument #1 to 'UnitExists' (Secret values are only allowed during untainted execution for this argument.)`, string operations on secret strings trigger `attempt to perform string conversion on a secret string value`, and indexing tables with secret numbers throws `attempted to perform indexed assignment on a table that cannot be indexed with secret keys`.
-- **Decision:** The compendium implements a comprehensive sanitization barrier:
-  1. `addon:IsSecretValue(val)`, `addon:SafeString(val)`, `addon:SafeNumber(val)`, and `addon:SafeBool(val)` safely guard all inputs using `issecretvalue()`, `issecrettable()`, and protected call (`pcall`) checks.
-  2. `addon:SanitizeUnitToken(unit)` validates unit tokens before any `Unit*` C API call. In `Tooltip.lua`, `tooltip:GetUnit()` is wrapped in `pcall` and sanitized; when the client returns `<secret string>` inside dungeons or battlegrounds, the engine cleanly falls back to `"mouseover"`.
-  3. `addon:CacheUnit(unit)` caches unit identity (`guid`, `npcID`, `name`) into `addon.unitTokenCache` during pre-combat target, mouseover, and nameplate additions so `addon:ResolveUnitIdentity(unit)` can still identify creatures if `UnitGUID` becomes restricted mid-combat.
-  4. If `spellID` or spell names are secret during combat, the engine falls back to `UnitCastingInfo`/`UnitChannelInfo` or queues the spell in `addon.pendingSpellResolutions` for deferred resolution upon `PLAYER_REGEN_ENABLED`.
+### 7. Secret Value Protection, Fail-Safe Execution & Toggleable Debug Mode (WoW 11.0+ / 12.0+ Compatibility)
+- **Context:** In modern World of Warcraft engine builds (`11.0+` / `12.0+` / `16001`), Blizzard introduced a security sandbox where unit tokens (`tooltip:GetUnit()`), unit GUIDs, event payloads (`spellID`), and spell names (`C_Spell.GetSpellInfo`) return "secret values" when queried inside instances or restricted combat contexts. Passing a secret string unit token into `UnitExists(unit)` throws `bad argument #1 to 'UnitExists' (Secret values are only allowed during untainted execution for this argument.)`.
+- **Decision:** Rather than building fragile workarounds to circumvent Blizzard's security boundaries, the compendium respects API restrictions cleanly and fails predictably:
+  1. **Battleground Inactivity (`addon:IsInBattleground()`):** The addon checks `IsInInstance()` / `GetInstanceInfo()` for `"pvp"` or `"arena"` and exits immediately so it does nothing inside PvP battlegrounds or arenas.
+  2. **Defensive Input Sanitization:** `addon:IsSecretValue(val)`, `addon:SafeString(val)`, `addon:SafeNumber(val)`, `addon:SafeBool(val)`, and `addon:SanitizeUnitToken(unit)` validate all values before any `Unit*` C API call or string/table operation.
+  3. **Predictable Tooltip Restriction Notice:** When hovering over a unit whose token or GUID is restricted by a secret value in a dungeon/instance, `Tooltip.lua` hides companion sidecars and appends a clean notice (`"[Compendium] Unable to retrieve information due to WoW API restrictions."`) instead of throwing a Lua error.
+  4. **Toggleable Debug Mode (`addon:SafeCall()`):** All event handlers (`Core.lua`, `CombatLog.lua`) and tooltip hooks (`Tooltip.lua`) execute inside `addon:SafeCall()`. In normal player mode (`debugMode == false`, the default), any unexpected API restriction error is caught and suppressed silently. When a developer enables `debugMode` (via `/acc debug` or the Settings checkbox), `SafeCall()` executes directly without `pcall` suppression so real Lua errors and stack traces surface for debugging.
 
 ### 8. Subzone & Local Area Discovery Policy
 - **Context:** Players want to know specific micro-areas where a creature is found (e.g. *Coldridge Pass* or *Kharanos* within *Dun Morogh*, or *Goblin Foundry* within *The Deadmines*) without recording hundreds of noisy map coordinates for standard world creatures, and without cluttering the primary zone navigation tree.
@@ -454,11 +448,9 @@ AzerothCreatureCompendiumDB
   1. **Dynamic `LibDataBroker-1.1` & `LibDBIcon-1.0` Registration:** On `PLAYER_LOGIN`, `addon:RegisterDataBrokerLauncher()` checks `_G["LibStub"]` for `LibDataBroker-1.1` and registers the `AzerothCreatureCompendium` launcher object. If `LibDBIcon-1.0` is also present in the addon environment, `addon:CreateMinimapButton()` registers the launcher with `LibDBIcon-1.0` (`db.settings.minimapIcon`), applies the addon's warm bronze tracking border tint, and synchronizes visibility via `addon:SetMinimapButtonShown()`.
   2. **Standard 3-Region Standalone Fallback:** When `LibDBIcon-1.0` is not present in the client environment, `addon:CreateMinimapButton()` constructs `AzerothCompendiumMinimapButton` using the standard 3-region hierarchy (`BACKGROUND` `UI-Minimap-Background`, `ARTWORK` named `$parentIcon` with `SetTexCoord(0.05, 0.95, 0.05, 0.95)` assigned to `btn.icon` and `btn.Icon`, and `OVERLAY` `MiniMap-TrackingBorder`) with zero `MaskTexture` regions and automatic square minimap (`GetMinimapShape()`) support.
 
-### 11. Dungeon & Instance Discovery and Real-Time Kill Tracking
-- **Context:** In World of Warcraft Classic Era, dungeon instances do not have world UI map IDs, causing `C_Map.GetBestMapForUnit("player")` to return `nil`. Additionally, in 5-player dungeon groups, individual players only loot a fraction of defeated creatures, and `UnitCanAttack("player", "target")` returns `false` once a creature is already dead.
-- **Decision:**
-  1. **Instance Zone Resolution:** `addon:GetPlayerLocation()` inspects `IsInInstance()` and `GetInstanceInfo()` whenever `C_Map.GetBestMapForUnit("player")` is unavailable or when inside a `party`/`raid` instance. It assigns the localized dungeon name (`instanceName`, with `GetRealZoneText()` fallback) and a collision-free synthetic `mapID` (`100000 + instanceID`), while recording interior dungeon rooms in `mob.subZones`.
-  2. **Real-Time Unit Death Detection:** `Core.lua` listens to `UNIT_HEALTH`, `UNIT_FLAGS`, `NAME_PLATE_UNIT_REMOVED`, and `PLAYER_REGEN_ENABLED` and calls `addon:TryRecordUnitKill()`. When a targeted or combat-engaged hostile creature reaches `UnitIsDead(unit)`, the kill is immediately recorded and deduplicated via `addon.killedCorpseGUIDs`, ensuring dungeon kills are credited even when another party member loots the corpse.
+### 11. Dungeon & Instance Zone Resolution
+- **Context:** In World of Warcraft Classic Era, dungeon instances do not have world UI map IDs, causing `C_Map.GetBestMapForUnit("player")` to return `nil`.
+- **Decision:** `addon:GetPlayerLocation()` inspects `IsInInstance()` and `GetInstanceInfo()` when inside a `party` or `raid` instance. It assigns the localized dungeon name (`instanceName`, with `GetRealZoneText()` fallback) and a collision-free synthetic `mapID` (`100000 + instanceID`), while recording interior dungeon rooms in `mob.subZones`. Whenever the WoW API permits reading creature GUIDs inside dungeons (such as when looting corpses via `LOOT_OPENED` or targeting unrestricted units), data is recorded under the dungeon's name.
 
 ---
 

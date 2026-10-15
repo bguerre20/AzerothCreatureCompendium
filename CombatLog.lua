@@ -106,8 +106,13 @@ combatFrame:RegisterEvent("UI_ERROR_MESSAGE")
 combatFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
-combatFrame:SetScript("OnEvent", function(self, event, ...)
+local function HandleCombatEvent(event, ...)
     if not addon.db or not addon.db.settings or not addon.db.settings.trackCombat then
+        return
+    end
+
+    -- Do nothing inside PvP Battlegrounds and Arenas
+    if addon:IsInBattleground() then
         return
     end
 
@@ -138,19 +143,11 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
             -- If it's STILL secret (or missing), record a single placeholder ability
             spellID = addon:SafeNumber(spellID, -1) or -1
 
-            local guid, npcID, mobName = addon:ResolveUnitIdentity(unit)
-            if addon.unitTokenCache and addon.unitTokenCache[unit] then
-                addon.unitTokenCache[unit].engaged = true
-                local key = guid or addon.unitTokenCache[unit].spawnKey
-                if key then
-                    addon:MarkMobEngaged(key)
-                end
-            elseif guid then
-                addon:MarkMobEngaged(guid)
-            end
+            local guid = addon:SafeString(UnitGUID(unit), nil)
+            local npcID = addon:GetNPCIDFromGUID(guid)
 
             if npcID and spellID then
-                mobName = mobName or ("Creature " .. npcID)
+                local mobName = addon:SafeString(UnitName(unit), nil) or addon.npcNameCache[npcID] or ("Creature " .. npcID)
                 local mapID, zoneName, _, subZone = addon:GetPlayerLocation()
 
                 local spellName, spellTexture
@@ -182,17 +179,6 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
         local rawUnit, _, _, eventSpellID = ...
         local unit = addon:SanitizeUnitToken(rawUnit)
         if unit == "player" and eventSpellID then
-            if addon:IsEligibleMobUnit("target") and not addon:SafeBool(UnitIsDead("target"), false) then
-                local tGuid = addon:ResolveUnitIdentity("target")
-                if addon.unitTokenCache and addon.unitTokenCache["target"] then
-                    addon.unitTokenCache["target"].engaged = true
-                    local key = tGuid or addon.unitTokenCache["target"].spawnKey
-                    if key then addon:MarkMobEngaged(key) end
-                elseif tGuid then
-                    addon:MarkMobEngaged(tGuid)
-                end
-            end
-
             local spellID = eventSpellID
             if addon:IsSecretValue(spellID) then
                 local _, _, _, _, _, _, _, _, castID = UnitCastingInfo(unit)
@@ -221,9 +207,10 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
 
         if string.find(lowerMsg, "immune", 1, true) then
             if addon:IsEligibleMobUnit("target") and addon:SafeBool(UnitCanAttack("player", "target"), false) then
-                local _, npcID, mobName = addon:ResolveUnitIdentity("target")
+                local guid = addon:SafeString(UnitGUID("target"), nil)
+                local npcID = addon:GetNPCIDFromGUID(guid)
                 if npcID then
-                    mobName = mobName or ("Creature " .. npcID)
+                    local mobName = addon:SafeString(UnitName("target"), nil) or addon.npcNameCache[npcID] or ("Creature " .. npcID)
                     local mapID, zoneName, _, subZone = addon:GetPlayerLocation()
 
                     -- Check what spell player recently cast
@@ -249,13 +236,17 @@ combatFrame:SetScript("OnEvent", function(self, event, ...)
     -- 4. Target Death & Kill Tracking
     ---------------------------------------------------------------------------
     elseif event == "PLAYER_TARGET_CHANGED" then
-        addon:TryRecordUnitKill("target", true)
+        addon:TryRecordUnitKill("target")
 
     ---------------------------------------------------------------------------
     -- 5. Out of Combat: Resolve Deferred Spells & Finalize Target Kills
     ---------------------------------------------------------------------------
     elseif event == "PLAYER_REGEN_ENABLED" then
         addon:ProcessPendingSpellResolutions()
-        addon:TryRecordUnitKill("target", true)
+        addon:TryRecordUnitKill("target")
     end
+end
+
+combatFrame:SetScript("OnEvent", function(_, event, ...)
+    addon:SafeCall(HandleCombatEvent, event, ...)
 end)

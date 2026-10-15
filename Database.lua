@@ -85,6 +85,9 @@ function addon:InitDatabase()
     if db.settings.showNewMobTooltip == nil then
         db.settings.showNewMobTooltip = true
     end
+    if db.settings.debugMode == nil then
+        db.settings.debugMode = false
+    end
 
     db.zones = db.zones or {}
     db.npcToZones = db.npcToZones or {}
@@ -194,14 +197,12 @@ function addon:InitDatabase()
 
     -- Sanitize existing zone, mob, and spell names against tainted/secret strings
     self.npcNameCache = self.npcNameCache or {}
-    self.nameToNpcIDCache = self.nameToNpcIDCache or {}
     for mapID, zone in pairs(db.zones) do
         zone.name = self:SafeString(zone.name, "Zone " .. mapID)
         for npcID, mob in pairs(zone.mobs or {}) do
             mob.name = self:SafeString(mob.name, "Creature " .. npcID)
             if mob.name and not string.find(mob.name, "^Creature %d+") then
                 self.npcNameCache[npcID] = mob.name
-                self.nameToNpcIDCache[mob.name] = npcID
             end
             if not mob.subZones then
                 mob.subZones = {}
@@ -327,9 +328,7 @@ function addon:GetOrCreateMob(mapID, zoneName, npcID, mobName, subZone)
 
     if mob.name and mob.name ~= "" and not string.find(mob.name, "^Creature %d+") then
         self.npcNameCache = self.npcNameCache or {}
-        self.nameToNpcIDCache = self.nameToNpcIDCache or {}
         self.npcNameCache[npcID] = mob.name
-        self.nameToNpcIDCache[mob.name] = npcID
     end
 
     -- Enrich from cached unit metadata if available

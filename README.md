@@ -71,6 +71,7 @@ Use `/acc`, `/compendium`, `/pokedex`, or the legacy aliases `/bgl` and `/bgloot
 | `/acc dock <beside\|above>` | Position sidecar tooltips beside or above/below the main tooltip |
 | `/acc anchor <tooltip\|cursor>` | Anchor tooltips to the main tooltip or mouse cursor |
 | `/acc newmob` | Toggle tooltip info on unrecorded creatures |
+| `/acc debug` | Toggle debug mode (show raw Lua errors vs fail-safe suppression) |
 | `/acc max <1-25>` | Set the maximum number of items shown in tooltips |
 | `/acc lookup <name>` | Search for a recorded creature in chat |
 | `/acc reset confirm` | Clear all recorded compendium data |

@@ -52,6 +52,9 @@ addon.DEFAULT_SETTINGS = {
     -- Combat Log Discovery
     trackCombat = true,            -- Monitor combat log for attacks and spells
     trackImmunities = true,        -- Monitor combat log for spell/mechanic immunities
+
+    -- Diagnostics & Error Handling
+    debugMode = false,             -- When false (default), suppress unexpected API restriction errors; when true, surface raw Lua errors
 }
 
 -- Quality text and colors
@@ -206,6 +209,20 @@ function addon:SafeBool(val, fallback)
     return res
 end
 
+-- Check whether developer debug mode is enabled
+function addon:IsDebugMode()
+    return (self.db and self.db.settings and self.db.settings.debugMode == true) or false
+end
+
+-- Execute a function safely: suppresses unexpected errors in normal mode (debugMode == false),
+-- or allows real Lua errors to surface when debugMode == true.
+function addon:SafeCall(func, ...)
+    if self:IsDebugMode() then
+        return true, func(...)
+    end
+    return pcall(func, ...)
+end
+
 -- Message printer helper
 function addon:Print(msg, ...)
     if select("#", ...) > 0 then
@@ -306,6 +323,9 @@ local function SlashCommandHandler(msg)
     elseif cmd == "newmob" or cmd == "firstencounter" or cmd == "unrecorded" then
         addon.db.settings.showNewMobTooltip = not addon.db.settings.showNewMobTooltip
         addon:Print("Unrecorded creature tooltip info: %s", addon.db.settings.showNewMobTooltip and "|cff00ff00Enabled|r" or "|cffff2020Disabled|r")
+    elseif cmd == "debug" or cmd == "debugmode" then
+        addon.db.settings.debugMode = not addon.db.settings.debugMode
+        addon:Print("Debug mode (show raw Lua errors): %s", addon.db.settings.debugMode and "|cffff8000Enabled|r" or "|cff00ff00Disabled (Safe Mode)|r")
     elseif cmd == "max" or cmd == "top" or cmd == "limit" then
         local num = tonumber(param)
         if num and num >= 1 and num <= 25 then
@@ -349,6 +369,7 @@ local function SlashCommandHandler(msg)
         print("  |cffffd100/acc anchor <tooltip|cursor>|r - Set tooltip anchor to main tooltip or mouse cursor")
         print("  |cffffd100/acc dock <beside|above>|r - Set sidecar docking orientation")
         print("  |cffffd100/acc newmob|r - Toggle tooltip info on unrecorded creatures")
+        print("  |cffffd100/acc debug|r - Toggle Debug Mode (show raw Lua errors vs fail-safe suppression)")
         print("  |cffffd100/acc max <1-25>|r - Max drops shown in tooltip")
         print("  |cffffd100/acc lookup <name>|r - Search recorded creature by name")
         print("  |cffffd100/acc reset confirm|r - Clear all recorded compendium history")

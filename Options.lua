@@ -386,9 +386,28 @@ local function InitializeOptions()
         end
     end)
 
+    -- Checkbox: Debug Mode (Show raw Lua errors vs fail-safe suppression)
+    local debugCheck = CreateFrame("CheckButton", "AzerothCompendiumDebugCheck", panel, "InterfaceOptionsCheckButtonTemplate")
+    debugCheck:SetPoint("TOPLEFT", minimapCheck, "BOTTOMLEFT", 0, -2)
+    local debugLabel = debugCheck.Text or _G[debugCheck:GetName() .. "Text"]
+    if debugLabel then
+        debugLabel:SetText("Enable Debug Mode (show raw Lua errors instead of suppressing API restriction errors)")
+        debugLabel:SetFontObject("GameFontHighlight")
+    end
+    debugCheck:SetScript("OnClick", function(self)
+        addon.db.settings.debugMode = self:GetChecked() and true or false
+    end)
+
+    -- Instance & Battleground API Restrictions Notice
+    local instanceNotice = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    instanceNotice:SetPoint("TOPLEFT", debugCheck, "BOTTOMLEFT", 4, -6)
+    instanceNotice:SetWidth(540)
+    instanceNotice:SetJustifyH("LEFT")
+    instanceNotice:SetText("|cffffd100Note on Instances & Battlegrounds:|r The Compendium is inactive inside PvP Battlegrounds. Inside dungeons and raids, Blizzard addon API restrictions may limit tooltip and combat tracking.")
+
     -- Quick Action: Open Pokédex Window
     local openWinBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    openWinBtn:SetPoint("TOPLEFT", minimapCheck, "BOTTOMLEFT", 4, -10)
+    openWinBtn:SetPoint("TOPLEFT", instanceNotice, "BOTTOMLEFT", 0, -10)
     openWinBtn:SetSize(190, 26)
     openWinBtn:SetText("|cffffd100Open Compendium Window|r")
     openWinBtn:SetScript("OnClick", function()
@@ -412,6 +431,7 @@ local function InitializeOptions()
         moneyCheck:SetChecked(s.showMoney ~= false)
         combatLogCheck:SetChecked(s.trackCombat ~= false)
         minimapCheck:SetChecked(s.showMinimap ~= false)
+        debugCheck:SetChecked(s.debugMode == true)
 
         local mobCount = 0
         local zoneCount = 0
